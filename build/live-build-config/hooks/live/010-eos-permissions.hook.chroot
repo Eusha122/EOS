@@ -3,6 +3,8 @@ set -eu
 
 chmod 0755 \
   /usr/local/bin/e-browser \
+  /usr/local/bin/eos-desktop-setup \
   /usr/local/bin/eos-desktop-app \
+  /usr/local/bin/eos-welcome \
   /usr/local/bin/void-browser \
   /usr/local/lib/eos-privet/boot-gate

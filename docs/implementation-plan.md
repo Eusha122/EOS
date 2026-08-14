@@ -50,7 +50,7 @@ Security principles for every phase:
 
 ### Phase 2 — Fresh live session
 
-- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (first KDE desktop reached; default Debian/KDE welcome cleanup is now in source).
+- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (first KDE desktop reached; source now adds EOS wallpaper, installer/welcome cleanup, and a Fresh-mode guide; rebuilt ISO test pending).
 - [ ] Ensure normal session data is temporary and does not use the host computer's internal disk.
 - [ ] Add safe shutdown and “fresh session” explanations in the welcome screen.
 - [ ] Test graphics, Wi-Fi, keyboard, touchpad, and shutdown in VirtualBox.

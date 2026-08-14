@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+# This runs within the Plasma session. Keep it deliberately small: the live
+# desktop is temporary, and later encrypted persistence may supply its own
+# settings instead of silently overwriting them.
+wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1920x1080.svg
+
+if command -v plasma-apply-wallpaperimage >/dev/null 2>&1; then
+  plasma-apply-wallpaperimage "$wallpaper" >/dev/null 2>&1 || true
+fi
+
+# Some Debian live images create this only after the image-finalisation hook.
+# Never leave an internal-disk installer shortcut on the EOS Privet desktop.
+if [ -d "${HOME}/Desktop" ]; then
+  find "${HOME}/Desktop" -maxdepth 1 -type f \( \
+    -iname '*debian*install*.desktop' -o \
+    -iname '*install*debian*.desktop' -o \
+    -iname '*live*install*.desktop' \
+  \) -delete 2>/dev/null || true
+fi

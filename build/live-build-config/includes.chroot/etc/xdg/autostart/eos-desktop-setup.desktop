@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=EOS Privet Desktop Setup
+Exec=eos-desktop-setup
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+X-KDE-autostart-after=panel
+NoDisplay=true

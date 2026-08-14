@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Start Here — EOS Privet
+Comment=Fresh-session privacy and daily-use guide
+Exec=eos-welcome
+Icon=help-about
+Categories=Utility;System;
+Terminal=false

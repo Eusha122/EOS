@@ -1,10 +1,16 @@
 #!/bin/sh
 set -eu
 
-# Keep the first live desktop from advertising itself as stock Debian/KDE.
-# Full EOS theming is Phase 5; this only removes obvious live-image noise.
+# Keep the fresh desktop from advertising itself as stock Debian/KDE.
+# EOS session setup also removes any installer shortcut generated after this
+# hook runs, because the live user home folder is created at boot.
 rm -f /etc/xdg/autostart/org.kde.plasma-welcome.desktop
 rm -f /usr/share/applications/debian-installer.desktop
 rm -f /usr/share/applications/live-installer.desktop
 rm -f /etc/skel/Desktop/debian-installer.desktop
 rm -f /etc/skel/Desktop/live-installer.desktop
+find /etc/skel/Desktop -maxdepth 1 -type f \( \
+  -iname '*debian*install*.desktop' -o \
+  -iname '*install*debian*.desktop' -o \
+  -iname '*live*install*.desktop' \
+\) -delete 2>/dev/null || true

@@ -19,7 +19,7 @@ Last updated: 2026-08-15
 | Desktop | KDE Plasma, Wayland preferred; X11 fallback retained |
 | Build workspace rule | Use VirtualBox shared folders only for transfer; run `live-build` from a native Debian filesystem such as `$HOME/EOS-build` |
 | First generated artifact | `out/EOS-Privet-0.1.0-dev-amd64.iso` was produced in the Debian builder VM; checksum was verified on Windows; UEFI VM boot reaches the desktop |
-| First boot-test finding | EOS gate appears before KDE and Fresh reaches the desktop; terminal styling needs a narrower cleaner logo and desktop still needs EOS branding |
+| First boot-test finding | EOS gate appears before KDE and Fresh reaches the desktop; Phase 2 now adds an EOS wallpaper, a Fresh-mode guide, and installer/welcome cleanup for the next ISO test |
 | Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
 | Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
 | Current Void implementation | Debian `torbrowser-launcher` behind an EOS `void-browser` launcher; upstream Tor Browser remains responsible for its privacy-sensitive browser code |

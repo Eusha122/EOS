@@ -15,24 +15,21 @@ draw_menu() {
   printf '%s[2J%s[H%s[?25l' "$esc" "$esc" "$esc"
   cat <<'SCREEN'
 
-  ______  ____   _____    ____   ____   ___ __     ______  ______
- |  ____|/ __ \ / ____|  |  _ \ |  _ \ |_ _|\ \   / / __ \|_   _|
- | |__  | |  | | (___    | |_) || |_) | | |  \ \_/ / |  | | | |
- |  __| | |  | |\___ \   |  __/ |  _ <  | |   \   /| |  | | | |
- | |____| |__| |____) |  | |    | | \ \ | |    | | | |__| |_| |_
- |______|\____/|_____/   |_|    |_|  \_\___|   |_|  \____/|_____|
-
- ----------------------------------------------------------------
-  USB LIVE PRIVACY SESSION GATE                         0.1.0-dev
- ----------------------------------------------------------------
-
-   [1] Explore fresh
-       Temporary session. Nothing personal is unlocked.
-
-   [2] Unlock saved storage
-       Encrypted USB storage. Not configured in this test build.
-
- ----------------------------------------------------------------
+  +================================================================+
+  |                         E O S   P R I V E T                    |
+  |                    USB LIVE PRIVACY SESSION                   |
+  +================================================================+
+  |  STATUS    FRESH MODE READY                                    |
+  |  BUILD     0.1.0-dev                                           |
+  +----------------------------------------------------------------+
+  |                                                                |
+  |  [1]  EXPLORE FRESH                                            |
+  |       Starts a temporary desktop. Nothing personal is unlocked.|
+  |                                                                |
+  |  [2]  UNLOCK SAVED STORAGE                                     |
+  |       Encrypted USB storage. Not configured in this test build.|
+  |                                                                |
+  +================================================================+
 SCREEN
 }
 
