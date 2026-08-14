@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=EOS Desktop App
+Comment=Future default EOS application
+Exec=eos-desktop-app
+Icon=applications-internet
+Categories=Utility;
+Terminal=true

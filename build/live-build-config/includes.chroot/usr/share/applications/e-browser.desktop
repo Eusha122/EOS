@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=E-Browser
+Comment=The EOS browser
+Exec=e-browser %U
+Icon=e-browser
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/pdf;x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=E-Browser
+Terminal=false

@@ -1,0 +1,8 @@
+id: e-browser
+display_name: E-Browser
+stage: scaffolded
+implementation: chromium-compatibility-launcher
+profile_directory: ~/.config/e-browser
+future_options:
+  - eos-maintained-chromium-package
+  - upstream-browser-fork

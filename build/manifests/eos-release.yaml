@@ -1,0 +1,19 @@
+name: EOS
+version: 0.1.0-dev
+architecture: amd64
+base:
+  distribution: kali-rolling
+  image: live-hybrid-iso
+desktop:
+  session: KDE Plasma
+  preferred_display_server: Wayland
+  fallback_display_server: X11
+components:
+  browser: e-browser
+  future_desktop_app: eos-desktop-app
+profiles:
+  - core
+  - web
+  - network
+  - forensics
+  - wireless

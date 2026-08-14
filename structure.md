@@ -1,0 +1,36 @@
+# EOS structure
+
+Last updated: 2026-08-14
+
+```text
+EOS/
+├── assets/
+│   └── branding/                 # Canonical logo and future brand assets
+├── apps/
+│   ├── e-browser/                # E-Browser package, launcher, policy, and docs
+│   └── eos-desktop-app/          # Future website-to-desktop application boundary
+├── build/
+│   ├── live-build-config/        # Versioned inputs copied into an isolated build workdir
+│   │   ├── includes.chroot/       # Files included inside the live filesystem
+│   │   ├── hooks/                  # Image-finalisation commands
+│   │   └── package-lists/         # OS package profiles
+│   ├── manifests/                # Machine-readable release/component manifests
+│   └── scripts/                  # Repeatable build entry points
+├── docs/                          # Design and operational documentation
+├── out/                           # Generated ISO and build outputs (ignored)
+├── context.md                     # Product decisions; update on contextual changes
+├── feather's.md                   # Features/status; update on capability changes
+└── structure.md                   # This map; update on layout changes
+```
+
+## Ownership
+
+| Path | Owns | Must not own |
+| --- | --- | --- |
+| `build/` | ISO assembly and base image defaults | application source code |
+| `apps/e-browser/` | browser branding, launcher, future package | Plasma-wide configuration |
+| `apps/eos-desktop-app/` | future desktop app package/integration | website source unless intentionally imported later |
+| `assets/branding/` | source brand assets | generated image artifacts |
+| `docs/` | human-facing product/build notes | build inputs |
+
+Generated content belongs in `out/` and must never be committed.

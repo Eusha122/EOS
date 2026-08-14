@@ -1,0 +1,16 @@
+# EOS desktop essentials
+kali-desktop-kde
+plasma-workspace-wayland
+chromium
+network-manager
+network-manager-gnome
+pipewire
+wireplumber
+flatpak
+curl
+git
+htop
+konsole
+dolphin
+ark
+filelight

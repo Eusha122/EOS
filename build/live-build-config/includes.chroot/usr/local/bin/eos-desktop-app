@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' 'EOS Desktop App is planned. This placeholder will be replaced by the packaged website application.'

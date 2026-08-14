@@ -1,0 +1,9 @@
+# ISO build output and live-build working state
+/out/
+/build/.work/
+/build/live-image-*.hybrid.iso
+
+# Local environment files
+.env
+.DS_Store
+Thumbs.db

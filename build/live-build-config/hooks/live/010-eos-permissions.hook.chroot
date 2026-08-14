@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+chmod 0755 /usr/local/bin/e-browser /usr/local/bin/eos-desktop-app
