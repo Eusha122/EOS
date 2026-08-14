@@ -17,6 +17,7 @@ Last updated: 2026-08-15
 | Pinned first build base | Debian 13 (`trixie`), so builds use a named release rather than a moving `stable` label |
 | Initial architecture | `amd64` (64-bit x86 PCs) |
 | Desktop | KDE Plasma, Wayland preferred; X11 fallback retained |
+| Build workspace rule | Use VirtualBox shared folders only for transfer; run `live-build` from a native Debian filesystem such as `$HOME/EOS-build` |
 | Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
 | Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
 | Current Void implementation | Debian `torbrowser-launcher` behind an EOS `void-browser` launcher; upstream Tor Browser remains responsible for its privacy-sensitive browser code |

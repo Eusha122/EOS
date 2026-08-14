@@ -1,6 +1,6 @@
 # EOS Privet fresh-session essentials (Debian 13 / trixie)
 live-task-kde
-plasma-workspace-wayland
+plasma-workspace
 sddm
 network-manager
 plasma-nm

@@ -6,11 +6,11 @@ Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Bootable hybrid ISO | in progress | Build script now targets Debian 13 (`trixie`) and emits a checksum; build still needs a Linux VM verification. |
+| Bootable hybrid ISO | in progress | Build script now targets Debian 13 (`trixie`) and emits a checksum; first VM build exposed the VirtualBox shared-folder symlink limit, so builds must run from a native Debian folder. |
 | USB-live-first workflow | planned | The core product should boot and run cleanly from USB without depending on installation. |
 | Text-mode boot gate | in progress | Systemd gate source now holds the display manager until Fresh or Saved is selected; it needs ISO boot testing. |
 | UEFI + legacy boot | planned | Validate both against the chosen live-build release. |
-| Lightweight Plasma desktop | scaffolded | Plasma is selected; desktop defaults and visual theme are next. |
+| Lightweight Plasma desktop | scaffolded | Plasma is selected with Debian 13 package names; desktop defaults and visual theme are next. |
 | Smooth macOS-like experience | planned | Use Wayland, hardware acceleration, restrained effects, a dock, and original EOS styling. |
 | Daily-use plug-and-use UX | planned | First boot should feel simple, readable, and low-friction for normal users. |
 | Void browser | scaffolded | `void-browser` starts Debian's Tor Browser Launcher; first launch needs network and remains unverified until ISO testing. |

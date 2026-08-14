@@ -40,10 +40,10 @@ Security principles for every phase:
 
 ### Phase 1 — Repeatable ISO foundation
 
-- [ ] Set up a clean Linux build VM.
-- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13; build verification remains).
+- [-] Set up a clean Linux build VM (Debian VM is installed; first build attempt found that VirtualBox shared folders cannot host the live-build workdir).
+- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13; first package-resolution issue fixed; build verification remains).
 - [ ] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible.
-- [ ] Record exact build commands and package versions.
+- [-] Record exact build commands and package versions (documented local-copy workflow; final package/version record still pending a successful build).
 - [ ] Add an ISO checksum and verification instructions.
 
 **Done when:** the same source creates a bootable test ISO twice, and both builds can be checked with a checksum.

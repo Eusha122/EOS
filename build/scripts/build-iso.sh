@@ -20,6 +20,16 @@ command -v lb >/dev/null 2>&1 || {
   exit 1
 }
 
+fs_type="$(stat -f -c %T "$project_root" 2>/dev/null || true)"
+case "$fs_type" in
+  vboxsf|fuseblk|fuse.vboxsf)
+    printf '%s\n' 'Do not run the ISO build from a VirtualBox shared folder.' >&2
+    printf '%s\n' 'Copy the project to a native Linux folder first, for example: cp -a /media/sf_EOS "$HOME/EOS-build"' >&2
+    printf '%s\n' 'Then run: cd "$HOME/EOS-build" && sudo bash build/scripts/build-iso.sh' >&2
+    exit 1
+    ;;
+esac
+
 [ -n "$version" ] && [ -n "$distribution" ] || {
   printf '%s\n' 'The release manifest must define version and base.distribution.' >&2
   exit 1

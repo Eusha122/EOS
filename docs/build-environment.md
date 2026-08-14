@@ -22,17 +22,32 @@ sudo apt update
 sudo apt install live-build debootstrap xorriso squashfs-tools isolinux syslinux-common grub-efi-amd64-bin mtools dosfstools ca-certificates git
 ```
 
-Copy the EOS Privet project folder into the Debian VM, then run from the project folder:
+Do not build directly from a VirtualBox shared folder such as `/media/sf_EOS`. VirtualBox shared folders do not fully support the Linux filesystem features `live-build` needs, especially symlinks.
+
+Use the shared folder only to move files between Windows and Debian. Copy the project onto Debian's own disk first:
+
+```bash
+rm -rf "$HOME/EOS-build"
+cp -a /media/sf_EOS "$HOME/EOS-build"
+cd "$HOME/EOS-build"
+```
+
+Then run from the local Debian copy:
 
 ```bash
 sudo bash build/scripts/build-iso.sh
 ```
 
-The ISO and its checksum are written to `out/`.
+The ISO and its checksum are written to `out/` inside the Debian copy. Copy them back to the shared folder when the build succeeds:
+
+```bash
+mkdir -p /media/sf_EOS/out
+cp -a out/*.iso out/*.sha256 /media/sf_EOS/out/
+```
 
 ## Verify an ISO
 
-From the project folder in Debian:
+From the local Debian build folder:
 
 ```bash
 sha256sum --check out/EOS-Privet-0.1.0-dev-amd64.iso.sha256
