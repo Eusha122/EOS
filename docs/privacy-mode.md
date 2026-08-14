@@ -8,7 +8,7 @@ EOS Privet should support a privacy-focused operating mode inspired by Tails:
 
 - start from a clean live session by default
 - minimise local traces after shutdown
-- offer optional encrypted persistent storage
+- offer optional encrypted persistent storage on the USB drive
 - route privacy-mode browsing through Tor-first tooling
 
 The goal is to reduce operator mistakes and local data leakage while still feeling practical for daily use. The goal is not to promise perfect anonymity.
@@ -29,8 +29,9 @@ For the first privacy-capable EOS Privet milestone, prefer:
 1. Live boot with amnesic defaults.
 2. Optional encrypted persistent storage using standard Linux disk encryption.
 3. A Tor-native browsing path for privacy mode.
-4. Clear warnings in the boot or welcome flow about metadata, account separation, and hostile hardware.
+4. A pre-desktop text gate where the user chooses a fresh session or unlocks saved storage.
 5. A first-run flow that keeps everyday tasks understandable for non-expert users.
+6. Saved files should follow the USB, so the user can boot the same drive on another PC and still access their encrypted data.
 
 ## Threat-model notes
 

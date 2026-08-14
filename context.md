@@ -12,11 +12,12 @@ Last updated: 2026-08-14
 
 | Area | Decision |
 | --- | --- |
-| Product model | USB-live-first privacy OS with optional encrypted persistence |
-| Distribution base | Current scaffold is Kali Rolling-compatible; privacy-first base choice remains open as the project pivots |
+| Product model | USB-live-first privacy OS with optional encrypted persistence on the same USB drive |
+| Distribution base | Debian-stable direction chosen for privacy and daily-use stability; current Kali scaffold is transitional until conversion |
 | Initial architecture | `amd64` (64-bit x86 PCs) |
 | Desktop | KDE Plasma, Wayland preferred; X11 fallback retained |
-| Browser direction | Tor-native privacy browser path required; current browser scaffolding is transitional |
+| Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
+| Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
 | Privacy mode | Core product direction: Tails-inspired live mode with amnesic defaults, optional encrypted persistence, and Tor-first browsing |
 | Brand asset | `assets/branding/eos-logo.svg` |
 | Daily-use posture | Plug-and-use daily workflow matters as much as hardening |
@@ -41,12 +42,14 @@ Last updated: 2026-08-14
 6. Privacy features must state their limits clearly; EOS Privet should reduce mistakes, not promise invisibility.
 7. Tor-style anonymous browsing must use a browser path designed for that threat model, not a re-skinned general browser alone.
 8. Installation to internal disks is secondary to the USB-live experience.
+9. User-saved files must persist on the encrypted USB storage and remain available when booting the same USB on another PC.
+10. The desktop must not appear until the user chooses fresh mode or unlocks storage from the text boot gate.
 
 ## Open decisions
 
 - EOS Privet release/version numbering and licence.
 - Exact KDE theme, icon set, wallpaper, sounds, and dock behaviour.
-- Whether the privacy browser brand becomes `Void`.
-- Whether the long-term base stays Kali-compatible or shifts to a more minimal privacy-first base.
+- How `Void` is packaged in the first release: bundled Tor Browser path first, or a more customized wrapper.
 - Persistent storage UX, unlock flow, and what data categories are allowed to persist.
+- Whether the unlock prompt uses passphrase only, or allows a PIN-style shortcut later.
 - Secure-boot/signing strategy and long-term update model.
