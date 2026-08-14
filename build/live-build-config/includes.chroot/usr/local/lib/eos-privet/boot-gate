@@ -8,33 +8,55 @@ mkdir -p "$runtime_dir"
 
 exec </dev/tty1 >/dev/tty1 2>&1
 
-while :; do
-  clear
-  cat <<'SCREEN'
-EOS PRIVET
------------
-1. Explore fresh
-2. Unlock saved storage
+esc="$(printf '\033')"
 
-Choose: 
+draw_menu() {
+  clear
+  printf '%s[2J%s[H%s[?25l' "$esc" "$esc" "$esc"
+  cat <<'SCREEN'
+
+  ______  ____   _____    ____   ____   ___ __     ______  ______
+ |  ____|/ __ \ / ____|  |  _ \ |  _ \ |_ _|\ \   / / __ \|_   _|
+ | |__  | |  | | (___    | |_) || |_) | | |  \ \_/ / |  | | | |
+ |  __| | |  | |\___ \   |  __/ |  _ <  | |   \   /| |  | | | |
+ | |____| |__| |____) |  | |    | | \ \ | |    | | | |__| |_| |_
+ |______|\____/|_____/   |_|    |_|  \_\___|   |_|  \____/|_____|
+
+ ----------------------------------------------------------------
+  USB LIVE PRIVACY SESSION GATE                         0.1.0-dev
+ ----------------------------------------------------------------
+
+   [1] Explore fresh
+       Temporary session. Nothing personal is unlocked.
+
+   [2] Unlock saved storage
+       Encrypted USB storage. Not configured in this test build.
+
+ ----------------------------------------------------------------
 SCREEN
-  printf '> '
+}
+
+while :; do
+  draw_menu
+  printf '  choose> '
   IFS= read -r choice || choice=''
 
   case "$choice" in
     1)
       printf '%s\n' fresh > "$runtime_dir/session-mode"
-      printf '%s\n' 'Starting a fresh EOS Privet session...'
+      printf '\n  [OK] Fresh session selected. Starting EOS Privet desktop...\n'
+      printf '      Session data is temporary unless encrypted storage is unlocked.\n'
       sleep 1
+      printf '%s[?25h' "$esc"
       exit 0
       ;;
     2)
-      printf '%s\n\n' 'Saved storage is not configured in this test build yet.'
-      printf '%s' 'Nothing was unlocked. Press Enter to return to the menu. '
+      printf '\n  [LOCKED] Saved storage is not configured in this test build yet.\n'
+      printf '           Nothing was unlocked. Press Enter to return. '
       IFS= read -r ignored || true
       ;;
     *)
-      printf '%s' 'Type 1 or 2, then press Enter. '
+      printf '\n  Type 1 or 2, then press Enter. '
       sleep 1
       ;;
   esac

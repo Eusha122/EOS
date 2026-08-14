@@ -13,7 +13,7 @@ The design separates two needs that should never be silently mixed:
 
 | Need | EOS Privet behaviour |
 | --- | --- |
-| Explore fresh | Do not unlock saved storage; session changes disappear on shutdown. |
+| Explore fresh | Do not unlock saved storage; session reaches the desktop and changes should disappear on shutdown. |
 | Use saved files and settings | Unlock the encrypted storage on the EOS USB with a strong passphrase. |
 | Private browsing | Void uses a Tor-native browser path; users are warned that logins, unsafe downloads, and compromised hardware can still identify them. |
 | Everyday use | Wi-Fi, files, updates, and basic apps stay understandable, with clear privacy labels instead of hidden “magic.” |
@@ -40,17 +40,17 @@ Security principles for every phase:
 
 ### Phase 1 — Repeatable ISO foundation
 
-- [-] Set up a clean Linux build VM (Debian VM is installed; first build attempt found that VirtualBox shared folders cannot host the live-build workdir).
-- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13; first package-resolution issue fixed; build verification remains).
-- [ ] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible.
+- [x] Set up a clean Linux build VM (Debian 13 VM produced the first ISO artifact).
+- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13, rebuilt, and boot-tested in UEFI VirtualBox; repeat-build verification remains).
+- [-] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible (first UEFI VirtualBox boot reached the live menu, EOS gate, and KDE Fresh desktop).
 - [-] Record exact build commands and package versions (documented local-copy workflow; final package/version record still pending a successful build).
-- [ ] Add an ISO checksum and verification instructions.
+- [x] Add an ISO checksum and verification instructions.
 
 **Done when:** the same source creates a bootable test ISO twice, and both builds can be checked with a checksum.
 
 ### Phase 2 — Fresh live session
 
-- [ ] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls.
+- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (first KDE desktop reached; default Debian/KDE welcome cleanup is now in source).
 - [ ] Ensure normal session data is temporary and does not use the host computer's internal disk.
 - [ ] Add safe shutdown and “fresh session” explanations in the welcome screen.
 - [ ] Test graphics, Wi-Fi, keyboard, touchpad, and shutdown in VirtualBox.
@@ -59,8 +59,8 @@ Security principles for every phase:
 
 ### Phase 3 — Boot gate and encrypted saved storage
 
-- [-] Add the full-screen text boot gate before the graphical desktop starts (source added; ISO test remains).
-- [-] Implement option `1`: **Explore fresh** (source added; ISO test remains).
+- [x] Add the full-screen text boot gate before the graphical desktop starts.
+- [-] Implement option `1`: **Explore fresh** (boot gate reaches KDE; temporary-session behaviour still needs restart testing).
 - [ ] Implement option `2`: **Unlock saved storage** with profile name and a strong passphrase.
 - [ ] Build a careful first-time setup flow that creates a dedicated LUKS2-encrypted data area on the EOS USB.
 - [ ] Mount only approved saved folders after successful unlock: Documents, Downloads, Pictures, selected KDE settings, and Void profile data.

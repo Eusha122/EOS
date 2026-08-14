@@ -42,4 +42,6 @@ EOS/
 | `assets/branding/` | source brand assets | generated image artifacts |
 | `docs/` | human-facing product, privacy, boot, and build notes | build inputs |
 
-Generated content belongs in `out/` and must never be committed.
+Generated content belongs in `out/` and must never be committed. The current local workspace may contain the first test ISO and checksum for VM testing.
+
+Live-build hooks under `build/live-build-config/hooks/live/` own small image cleanup steps, such as removing default live-desktop prompts until the full EOS theme exists.

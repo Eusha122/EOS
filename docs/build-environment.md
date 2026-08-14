@@ -45,12 +45,26 @@ mkdir -p /media/sf_EOS/out
 cp -a out/*.iso out/*.sha256 /media/sf_EOS/out/
 ```
 
+## Clean a failed build
+
+Failed `live-build` attempts can leave root-owned files under `build/.work/`. Clean only the local Debian copy, never the shared source folder:
+
+```bash
+cd "$HOME"
+sudo umount -R "$HOME/EOS-build/build/.work/live-build/chroot" 2>/dev/null || true
+sudo rm -rf "$HOME/EOS-build"
+cp -a /media/sf_EOS "$HOME/EOS-build"
+cd "$HOME/EOS-build"
+sudo bash build/scripts/build-iso.sh
+```
+
 ## Verify an ISO
 
 From the local Debian build folder:
 
 ```bash
-sha256sum --check out/EOS-Privet-0.1.0-dev-amd64.iso.sha256
+cd out
+sha256sum --check EOS-Privet-0.1.0-dev-amd64.iso.sha256
 ```
 
 The command must report `OK` before using the ISO in a VM or writing it to a USB drive.

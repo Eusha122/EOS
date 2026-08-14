@@ -1,6 +1,6 @@
 # EOS Privet boot flow
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Goal
 
@@ -10,15 +10,30 @@ The user should not need Linux knowledge. They should only need to read two choi
 
 ## Main flow
 
-On boot, show:
+On boot, show a quiet full-screen terminal interface. The first test ISO proved the gate appears before KDE and option `1` reaches KDE. It also showed that the current ASCII logo is too wide in the VM, so the next visual pass should use a narrower premium terminal banner.
+
+Target style:
 
 ```text
-EOS PRIVET
------------
-1. Explore fresh
-2. Unlock saved storage
+  ______  ____   _____    ____   ____   ___ __     ______  ______
+ |  ____|/ __ \ / ____|  |  _ \ |  _ \ |_ _|\ \   / / __ \|_   _|
+ | |__  | |  | | (___    | |_) || |_) | | |  \ \_/ / |  | | | |
+ |  __| | |  | |\___ \   |  __/ |  _ <  | |   \   /| |  | | | |
+ | |____| |__| |____) |  | |    | | \ \ | |    | | | |__| |_| |_
+ |______|\____/|_____/   |_|    |_|  \_\___|   |_|  \____/|_____|
 
-Choose: _
+ ----------------------------------------------------------------
+  USB LIVE PRIVACY SESSION GATE                         0.1.0-dev
+ ----------------------------------------------------------------
+
+   [1] Explore fresh
+       Temporary session. Nothing personal is unlocked.
+
+   [2] Unlock saved storage
+       Encrypted USB storage. Not configured in this test build.
+
+ ----------------------------------------------------------------
+  choose> _
 ```
 
 If the user types `1`:
@@ -85,6 +100,7 @@ When saved storage is unlocked, these are good first targets:
 ## What should not happen
 
 - The desktop must not start before the choice screen.
+- Kernel or system service logs should not cover the choice screen in normal boot.
 - Saved storage must not auto-unlock by default.
 - Fresh mode must not silently write personal data to the internal PC disk.
 - The system must not pretend that a fresh session equals perfect anonymity.

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+# Keep the first live desktop from advertising itself as stock Debian/KDE.
+# Full EOS theming is Phase 5; this only removes obvious live-image noise.
+rm -f /etc/xdg/autostart/org.kde.plasma-welcome.desktop
+rm -f /usr/share/applications/debian-installer.desktop
+rm -f /usr/share/applications/live-installer.desktop
+rm -f /etc/skel/Desktop/debian-installer.desktop
+rm -f /etc/skel/Desktop/live-installer.desktop

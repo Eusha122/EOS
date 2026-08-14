@@ -43,6 +43,7 @@ esac
 rm -rf "$work_root"
 mkdir -p "$work_root/config" "$output_root"
 cp -a "$config_root/." "$work_root/config/"
+find "$work_root/config/hooks" -type f -name '*.hook.chroot' -exec chmod 0755 {} +
 install -Dm644 "$project_root/assets/branding/eos-logo.svg" \
   "$work_root/config/includes.chroot/usr/share/icons/hicolor/scalable/apps/void-browser.svg"
 cd "$work_root"
@@ -53,7 +54,7 @@ lb config \
   --binary-images iso-hybrid \
   --debian-installer none \
   --archive-areas 'main contrib non-free non-free-firmware' \
-  --bootappend-live 'boot=live components username=eos hostname=eos-privet' \
+  --bootappend-live 'boot=live components username=eos hostname=eos-privet quiet loglevel=3 systemd.show_status=false udev.log_level=3 vt.global_cursor_default=0' \
   --iso-application 'EOS Privet' \
   --iso-publisher 'EOS Privet Project' \
   --apt-indices false
@@ -68,6 +69,6 @@ artifacts=( *.iso )
 }
 
 mv "${artifacts[0]}" "$output_root/$iso_name"
-sha256sum "$output_root/$iso_name" > "$output_root/$iso_name.sha256"
+(cd "$output_root" && sha256sum "$iso_name" > "$iso_name.sha256")
 printf 'EOS Privet ISO written to %s\n' "$output_root/$iso_name"
 printf 'Checksum written to %s\n' "$output_root/$iso_name.sha256"
