@@ -47,3 +47,5 @@ Generated content belongs in `out/` and must never be committed. The current loc
 Live-build hooks under `build/live-build-config/hooks/live/` own small image cleanup steps, such as removing default live-desktop prompts until the full EOS theme exists.
 
 `includes.chroot/usr/share/wallpapers/EOSPrivet/` owns the versioned EOS fresh-session wallpaper. `includes.chroot/usr/local/bin/eos-desktop-setup` applies it inside Plasma and removes late-generated installer shortcuts. `eos-welcome` provides the plain-language Fresh-mode guide.
+
+`assets/wallpapers/` owns the canonical Cicada wallpaper source files. The build script copies them into the live image; `eos-wallpapers` exposes the three alternatives in the desktop menu.

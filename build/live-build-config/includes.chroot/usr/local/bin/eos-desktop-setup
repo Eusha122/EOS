@@ -4,7 +4,7 @@ set -eu
 # This runs within the Plasma session. Keep it deliberately small: the live
 # desktop is temporary, and later encrypted persistence may supply its own
 # settings instead of silently overwriting them.
-wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1920x1080.svg
+wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/cicada-default.png
 
 if command -v plasma-apply-wallpaperimage >/dev/null 2>&1; then
   plasma-apply-wallpaperimage "$wallpaper" >/dev/null 2>&1 || true

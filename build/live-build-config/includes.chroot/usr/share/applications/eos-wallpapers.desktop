@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=EOS Wallpapers
+Comment=Choose an EOS Privet Fresh-session wallpaper
+Exec=eos-wallpapers
+Icon=preferences-desktop-wallpaper
+Categories=Settings;DesktopSettings;
+Terminal=false

@@ -4,6 +4,7 @@ set -euo pipefail
 # Build EOS Privet from a Debian Linux system with live-build installed.
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 config_root="$project_root/build/live-build-config"
+wallpaper_root="$project_root/assets/wallpapers"
 work_root="$project_root/build/.work/live-build"
 output_root="$project_root/out"
 version="$(sed -n 's/^version: //p' "$project_root/build/manifests/eos-release.yaml" | head -n 1)"
@@ -46,6 +47,14 @@ cp -a "$config_root/." "$work_root/config/"
 find "$work_root/config/hooks" -type f -name '*.hook.chroot' -exec chmod 0755 {} +
 install -Dm644 "$project_root/assets/branding/eos-logo.svg" \
   "$work_root/config/includes.chroot/usr/share/icons/hicolor/scalable/apps/void-browser.svg"
+install -Dm644 "$wallpaper_root/cicada-default.png" \
+  "$work_root/config/includes.chroot/usr/share/wallpapers/EOSPrivet/contents/images/cicada-default.png"
+install -Dm644 "$wallpaper_root/cicada-01.png" \
+  "$work_root/config/includes.chroot/usr/share/wallpapers/EOSPrivet/contents/images/cicada-01.png"
+install -Dm644 "$wallpaper_root/cicada-02.png" \
+  "$work_root/config/includes.chroot/usr/share/wallpapers/EOSPrivet/contents/images/cicada-02.png"
+install -Dm644 "$wallpaper_root/cicada-03.png" \
+  "$work_root/config/includes.chroot/usr/share/wallpapers/EOSPrivet/contents/images/cicada-03.png"
 cd "$work_root"
 
 lb config \

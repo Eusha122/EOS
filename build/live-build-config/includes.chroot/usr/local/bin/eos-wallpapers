@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+wallpaper_dir=/usr/share/wallpapers/EOSPrivet/contents/images
+
+choice="$(kdialog --title 'EOS Wallpapers' --menu \
+  'Choose an EOS Privet wallpaper for this Fresh session.' \
+  default 'Cicada IV — default' \
+  cicada-01 'Cicada I' \
+  cicada-02 'Cicada II' \
+  cicada-03 'Cicada III')" || exit 0
+
+case "$choice" in
+  default) wallpaper="$wallpaper_dir/cicada-default.png" ;;
+  cicada-01) wallpaper="$wallpaper_dir/cicada-01.png" ;;
+  cicada-02) wallpaper="$wallpaper_dir/cicada-02.png" ;;
+  cicada-03) wallpaper="$wallpaper_dir/cicada-03.png" ;;
+  *) exit 0 ;;
+esac
+
+plasma-apply-wallpaperimage "$wallpaper"

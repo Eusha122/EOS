@@ -26,6 +26,7 @@ Last updated: 2026-08-15
 | Privacy mode | Core product direction: Tails-inspired live mode with amnesic defaults, optional encrypted persistence, and Tor-first browsing |
 | Security promise | Reduce risk with tested, proven components; never claim EOS Privet is unhackable or fully anonymous |
 | Brand asset | `assets/branding/eos-logo.svg` |
+| Default wallpaper | `assets/wallpapers/cicada-default.png`, the user-supplied Cicada IV design; three other Cicada designs are selectable in Fresh mode |
 | Daily-use posture | Plug-and-use daily workflow matters as much as hardening |
 | Future built-in app | Website will later be packaged as the default `eos-desktop-app` |
 

@@ -10,7 +10,7 @@ Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 | USB-live-first workflow | planned | The core product should boot and run cleanly from USB without depending on installation. |
 | Text-mode boot gate | verified | Gate appears before KDE and option `1` starts the desktop in the VM; future work is visual polish and saved-storage mode. |
 | UEFI + legacy boot | planned | Validate both against the chosen live-build release. |
-| Lightweight Plasma desktop | in progress | Plasma now ships an EOS wallpaper, Fresh-mode guide, and cleanup for Debian installer/KDE welcome noise; the rebuilt ISO still needs visual testing. |
+| Lightweight Plasma desktop | in progress | Plasma now uses the supplied Cicada IV wallpaper by default, offers three other Cicada wallpapers, includes a Fresh-mode guide, and removes Debian installer/KDE welcome noise; rebuilt ISO test pending. |
 | Smooth macOS-like experience | planned | Use Wayland, hardware acceleration, restrained effects, a dock, and original EOS styling. |
 | Daily-use plug-and-use UX | in progress | Fresh session opens a plain-language EOS guide and gives the user a direct Void launch option; rebuilt ISO test still pending. |
 | Void browser | scaffolded | `void-browser` starts Debian's Tor Browser Launcher; first launch needs network and remains unverified until ISO testing. |
