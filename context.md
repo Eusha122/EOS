@@ -1,6 +1,6 @@
 # EOS Privet context
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Identity
 
@@ -19,6 +19,7 @@ Last updated: 2026-08-14
 | Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
 | Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
 | Privacy mode | Core product direction: Tails-inspired live mode with amnesic defaults, optional encrypted persistence, and Tor-first browsing |
+| Security promise | Reduce risk with tested, proven components; never claim EOS Privet is unhackable or fully anonymous |
 | Brand asset | `assets/branding/eos-logo.svg` |
 | Daily-use posture | Plug-and-use daily workflow matters as much as hardening |
 | Future built-in app | Website will later be packaged as the default `eos-desktop-app` |
@@ -53,3 +54,8 @@ Last updated: 2026-08-14
 - Persistent storage UX, unlock flow, and what data categories are allowed to persist.
 - Whether the unlock prompt uses passphrase only, or allows a PIN-style shortcut later.
 - Secure-boot/signing strategy and long-term update model.
+- Release versioning, licence, and supported-PC policy.
+
+## Delivery tracking
+
+The detailed roadmap and its verified completion checkboxes live in [`docs/implementation-plan.md`](docs/implementation-plan.md). A phase is marked done only after its stated test conditions pass.

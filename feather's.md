@@ -1,6 +1,6 @@
 # EOS Privet feature catalogue
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 
@@ -22,6 +22,7 @@ Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 | Internal-disk installer | planned | Secondary feature after the USB-live product is solid. |
 | Signed update channel | planned | Requires project keys, hosting, and release policy. |
 | Automated ISO testing | planned | Add virtual-machine boot tests after the first successful build. |
+| Phased implementation roadmap | verified | `docs/implementation-plan.md` tracks delivery phases with test-based completion checkboxes. |
 
 ## Performance acceptance goals
 

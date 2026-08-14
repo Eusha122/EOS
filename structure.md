@@ -1,6 +1,6 @@
 # EOS Privet structure
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ```text
 EOS/
@@ -26,6 +26,8 @@ EOS/
 ```
 
 ## Ownership
+
+`docs/implementation-plan.md` owns the phased roadmap and its verified completion tracking.
 
 | Path | Owns | Must not own |
 | --- | --- | --- |
