@@ -1,4 +1,4 @@
-# EOS feature catalogue
+# EOS Privet feature catalogue
 
 Last updated: 2026-08-14
 
@@ -7,14 +7,18 @@ Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Bootable hybrid ISO | scaffolded | Live-build script targets a Kali-compatible `amd64` ISO. |
+| USB-live-first workflow | planned | The core product should boot and run cleanly from USB without depending on installation. |
 | UEFI + legacy boot | planned | Validate both against the chosen live-build release. |
 | Lightweight Plasma desktop | scaffolded | Plasma is selected; desktop defaults and visual theme are next. |
 | Smooth macOS-like experience | planned | Use Wayland, hardware acceleration, restrained effects, a dock, and original EOS styling. |
-| E-Browser | scaffolded | Branded launcher with a dedicated user profile and desktop entry. |
-| Default security toolkit | scaffolded | Tool list is deliberately modular in the package manifest. |
-| Security profiles/editions | scaffolded | `core`, `web`, `network`, `forensics`, and `wireless` are package groups. |
+| Daily-use plug-and-use UX | planned | First boot should feel simple, readable, and low-friction for normal users. |
+| Privacy browser path | planned | Tor-native browsing is required; current browser scaffolding is transitional. |
+| Tails-style privacy mode | planned | Live session should start clean, leave minimal local trace, and expose privacy limits clearly. |
+| Encrypted persistent storage | planned | Optional persistence should use standard Linux disk encryption and require explicit unlock. |
+| Tor-first browsing path | planned | High-privacy browsing should use a Tor-native browser flow rather than relying on Chromium branding alone. |
+| Default tool selection | scaffolded | Current scaffold still carries modular package groups from the earlier EOS direction. |
 | Future EOS desktop app | scaffolded | Isolated package boundary and placeholder launcher exist. |
-| Installer | planned | Select after the live ISO has been tested. |
+| Internal-disk installer | planned | Secondary feature after the USB-live product is solid. |
 | Signed update channel | planned | Requires project keys, hosting, and release policy. |
 | Automated ISO testing | planned | Add virtual-machine boot tests after the first successful build. |
 
@@ -23,8 +27,9 @@ Status legend: `planned` · `scaffolded` · `in progress` · `verified`
 - Responsive desktop on integrated graphics that supports the selected Plasma session.
 - Animations never block input; offer a reduced-effects preset.
 - No always-running heavyweight service without a user-visible purpose.
-- Security tools are installed only when their selected profile needs them.
+- Privacy mode must default to ephemeral state unless the user explicitly unlocks persistence.
+- Everyday tasks like Wi-Fi, browsing, files, and shutdown must work without specialist knowledge.
 
 ## Safety boundary
 
-EOS may include tools used for reconnaissance, testing, analysis, and auditing. They are for systems the operator owns or has clear written authority to assess. EOS documentation and defaults must not present unauthorised access as a supported use.
+EOS Privet must not market itself as a guarantee of anonymity, and must not present dark-web access as inherently safe.

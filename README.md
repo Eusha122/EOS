@@ -1,16 +1,19 @@
-# EOS
+# EOS Privet
 
-EOS is a lightweight, polished security-focused Linux distribution. It is built for authorised security work, ordinary daily computing, and a fast, macOS-inspired desktop experience.
+EOS Privet is a privacy-first, USB-live Linux distribution designed for daily use, safe defaults, and a polished macOS-inspired desktop experience.
 
 ## Product direction
 
-- **Foundation:** Kali Rolling-compatible live system, packaged as an `amd64` hybrid ISO for UEFI PCs, with legacy BIOS support where the base toolchain supports it.
+- **Identity:** a plug-and-use live OS that boots from USB, starts clean, and keeps privacy features front and center without pretending to be magic.
+- **Foundation:** a live `amd64` hybrid ISO for UEFI PCs, with legacy BIOS support where the base toolchain supports it.
 - **Desktop:** KDE Plasma, preferring Wayland for fluid animation and touchpad behaviour, with an X11 fallback for older hardware and applications.
-- **Browser:** E-Browser, an EOS-branded Chromium launcher and profile today; a separately versioned browser product as the project matures.
+- **Boot model:** USB-live first. The core experience should work well without installation to an internal disk.
+- **Browser:** a Tor-native privacy browser path is a first-class product requirement. Current browser scaffolding remains in the repo, but the privacy browser brand and implementation are part of the pivot.
+- **Privacy model:** Tails-inspired live workflow with amnesic sessions, optional encrypted persistence, and explicit warnings about threat-model limits.
 - **Future app:** `eos-desktop-app` is deliberately isolated as its own package boundary. The future website-to-desktop app will replace its placeholder package without changing the OS build design.
-- **Security:** tools are grouped into optional profiles so the default image stays smaller and the project can have editions later.
+- **Daily use:** the system should feel simple enough to plug in and use for ordinary browsing, communication, and personal work without setup friction.
 
-EOS must only be used to assess systems and networks where the user has explicit permission.
+EOS Privet must not claim to guarantee anonymity or make illegal activity a product goal.
 
 ## Repository guide
 
@@ -20,11 +23,11 @@ The three maintained documents are part of the development contract:
 - [`feather's.md`](<feather's.md>) — feature catalogue and delivery status.
 - [`structure.md`](structure.md) — directory ownership and component boundaries.
 
-Update all three whenever a change affects EOS's purpose, capabilities, or layout.
+Update all three whenever a change affects EOS Privet's purpose, capabilities, or layout.
 
 ## Build prerequisites
 
-Build the ISO from a Debian/Kali-compatible Linux environment (native Linux, a VM, or WSL 2), not from Windows directly. Install `live-build`, `debootstrap`, and the usual ISO/boot tooling from the build environment's package manager.
+Build the ISO from a Linux environment (native Linux, a VM, or WSL 2), not from Windows directly. Install `live-build`, `debootstrap`, and the usual ISO/boot tooling from the build environment's package manager.
 
 ```bash
 bash build/scripts/build-iso.sh
@@ -34,7 +37,7 @@ The output is written to `out/`. Build scripts intentionally keep generated file
 
 ## First milestones
 
-1. Produce and test the first EOS live ISO in a virtual machine.
-2. Complete the EOS Plasma theme, dock, top bar, login screen, and boot splash.
-3. Package E-Browser instead of relying on its compatibility launcher.
-4. Add an installer, signed packages, updates, and the future EOS desktop app.
+1. Produce and test the first EOS Privet USB-live ISO in a virtual machine.
+2. Complete the EOS Privet Plasma theme, dock, top bar, login screen, and boot splash.
+3. Implement the privacy browser path and encrypted persistence flow.
+4. Add welcome-screen privacy guidance, signed updates, and the future EOS desktop app.

@@ -1,4 +1,4 @@
-# EOS structure
+# EOS Privet structure
 
 Last updated: 2026-08-14
 
@@ -16,7 +16,8 @@ EOS/
 │   │   └── package-lists/         # OS package profiles
 │   ├── manifests/                # Machine-readable release/component manifests
 │   └── scripts/                  # Repeatable build entry points
-├── docs/                          # Design and operational documentation
+├── docs/                          # Design, privacy, and operational documentation
+│   └── privacy-mode.md            # Tails-inspired privacy-mode intent and guardrails
 ├── out/                           # Generated ISO and build outputs (ignored)
 ├── context.md                     # Product decisions; update on contextual changes
 ├── feather's.md                   # Features/status; update on capability changes
@@ -31,6 +32,6 @@ EOS/
 | `apps/e-browser/` | browser branding, launcher, future package | Plasma-wide configuration |
 | `apps/eos-desktop-app/` | future desktop app package/integration | website source unless intentionally imported later |
 | `assets/branding/` | source brand assets | generated image artifacts |
-| `docs/` | human-facing product/build notes | build inputs |
+| `docs/` | human-facing product, privacy, and build notes | build inputs |
 
 Generated content belongs in `out/` and must never be committed.
