@@ -1,18 +1,11 @@
-# E-Browser
+# E-Browser compatibility layer
 
-E-Browser is the default browser product for EOS.
-
-## Version 0.x
-
-The first EOS images use a small launcher around the distribution Chromium package. It creates an E-Browser-specific profile, so browser data and future EOS settings have a stable migration point.
+E-Browser is an old project name retained only so existing development shortcuts keep working. New EOS Privet images use [Void](../void/README.md).
 
 ## Package boundary
 
-This directory will own the browser's branding, policy, packaging, release notes, and eventually its source or upstream-fork integration. The ISO only consumes the resulting package/launcher; it must not contain browser product logic.
+Void owns new browser branding, policy, packaging, and release notes. This compatibility area will be removed only after migration testing.
 
 ## Planned principles
 
-- Fast cold start and sane defaults.
-- Clear privacy and update behaviour.
-- Support for security research extensions without bundling unsafe defaults.
-- A stable profile migration path from the 0.x launcher.
+- A stable path for old E-Browser launchers to start Void.

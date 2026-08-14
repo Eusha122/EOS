@@ -1,12 +1,17 @@
-# EOS desktop essentials
-kali-desktop-kde
+# EOS Privet fresh-session essentials (Debian 13 / trixie)
+live-task-kde
 plasma-workspace-wayland
-chromium
+sddm
 network-manager
-network-manager-gnome
+plasma-nm
 pipewire
+pipewire-audio
 wireplumber
-flatpak
+torbrowser-launcher
+cryptsetup
+apparmor
+apparmor-utils
+ca-certificates
 curl
 git
 htop

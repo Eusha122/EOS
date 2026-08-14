@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Void is an EOS Privet launcher for the upstream Tor Browser path.  The first
+# run downloads and verifies Tor Browser through Debian's supported launcher.
+if command -v torbrowser-launcher >/dev/null 2>&1; then
+  exec torbrowser-launcher "$@"
+fi
+
+printf '%s\n' 'Void needs Tor Browser Launcher, but it is not installed.' >&2
+exit 127

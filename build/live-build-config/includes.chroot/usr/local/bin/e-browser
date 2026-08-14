@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compatibility launcher for E-Browser 0.x.  The browser implementation is
-# Chromium while EOS develops its independently versioned browser package.
-profile_dir="${XDG_CONFIG_HOME:-$HOME/.config}/e-browser"
-mkdir -p "$profile_dir"
-
-for browser in chromium chromium-browser; do
-  if command -v "$browser" >/dev/null 2>&1; then
-    exec "$browser" --user-data-dir="$profile_dir" --class=E-Browser "$@"
-  fi
-done
-
-printf '%s\n' 'E-Browser needs Chromium, but no compatible Chromium command was found.' >&2
-exit 127
+# Compatibility launcher retained for old development shortcuts.
+# New images should launch Void directly.
+exec void-browser "$@"

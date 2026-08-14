@@ -1,0 +1,10 @@
+id: void-browser
+display_name: Void
+stage: scaffolded
+implementation: torbrowser-launcher
+upstream_path: Tor Browser
+launch_command: void-browser
+profile_location: ~/.local/share/torbrowser
+security_notes:
+  - Tor Browser is downloaded and verified by the supported Debian launcher on first use.
+  - Void does not claim that all system traffic is anonymous.

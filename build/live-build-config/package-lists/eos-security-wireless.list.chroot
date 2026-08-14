@@ -1,3 +1,2 @@
-# Wireless assessment tools; requires explicit authorisation and compatible hardware
-aircrack-ng
-bettercap
+# Reserved for a later, optional authorised-security-tools profile.
+# Keeping the first privacy image small reduces its attack surface.

@@ -29,10 +29,15 @@ EOS/
 
 `docs/implementation-plan.md` owns the phased roadmap and its verified completion tracking.
 
+`apps/void/` owns the active Void browser contract. `apps/e-browser/` is now a legacy compatibility layer.
+
+`docs/build-environment.md` owns the Debian VM setup and ISO build instructions.
+
 | Path | Owns | Must not own |
 | --- | --- | --- |
 | `build/` | ISO assembly and base image defaults | application source code |
-| `apps/e-browser/` | browser branding, launcher, future package | Plasma-wide configuration |
+| `apps/e-browser/` | legacy launcher compatibility only | new browser product work |
+| `apps/void/` | Void browser branding, launcher contract, and future package | Plasma-wide configuration |
 | `apps/eos-desktop-app/` | future desktop app package/integration | website source unless intentionally imported later |
 | `assets/branding/` | source brand assets | generated image artifacts |
 | `docs/` | human-facing product, privacy, boot, and build notes | build inputs |

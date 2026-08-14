@@ -41,7 +41,7 @@ Security principles for every phase:
 ### Phase 1 — Repeatable ISO foundation
 
 - [ ] Set up a clean Linux build VM.
-- [ ] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build`.
+- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13; build verification remains).
 - [ ] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible.
 - [ ] Record exact build commands and package versions.
 - [ ] Add an ISO checksum and verification instructions.
@@ -59,8 +59,8 @@ Security principles for every phase:
 
 ### Phase 3 — Boot gate and encrypted saved storage
 
-- [ ] Add the full-screen text boot gate before the graphical desktop starts.
-- [ ] Implement option `1`: **Explore fresh**.
+- [-] Add the full-screen text boot gate before the graphical desktop starts (source added; ISO test remains).
+- [-] Implement option `1`: **Explore fresh** (source added; ISO test remains).
 - [ ] Implement option `2`: **Unlock saved storage** with profile name and a strong passphrase.
 - [ ] Build a careful first-time setup flow that creates a dedicated LUKS2-encrypted data area on the EOS USB.
 - [ ] Mount only approved saved folders after successful unlock: Documents, Downloads, Pictures, selected KDE settings, and Void profile data.
@@ -71,8 +71,8 @@ Security principles for every phase:
 
 ### Phase 4 — Void and privacy networking
 
-- [ ] Rename the transitional browser package and launcher to **Void**.
-- [ ] Integrate a Tor-native browser path based on supported upstream technology.
+- [-] Rename the transitional browser package and launcher to **Void** (new Void package boundary added; old shortcut remains for compatibility).
+- [-] Integrate a Tor-native browser path based on supported upstream technology (Debian Tor Browser Launcher configured; ISO test remains).
 - [ ] Add a visible connection state and simple explanation of what Tor does and does not protect.
 - [ ] Block or clearly label applications that would bypass the selected privacy path; never silently claim all traffic is anonymous.
 - [ ] Add download warnings, update verification, and separate-browser-profile guidance.

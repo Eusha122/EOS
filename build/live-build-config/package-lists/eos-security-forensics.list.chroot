@@ -1,4 +1,2 @@
-# Local evidence and file-analysis tools
-binwalk
-foremost
-testdisk
+# Reserved for a later, optional authorised-security-tools profile.
+# Keeping the first privacy image small reduces its attack surface.

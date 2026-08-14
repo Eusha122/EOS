@@ -1,4 +1,2 @@
-# Web-application assessment tools for authorised work
-zaproxy
-burpsuite
-whatweb
+# Reserved for a later, optional authorised-security-tools profile.
+# Keeping the first privacy image small reduces its attack surface.

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Void (legacy shortcut)
-Comment=Compatibility shortcut for the Void privacy browser
+Name=Void
+Comment=Privacy browser powered by Tor Browser
 Exec=void-browser %U
 Icon=void-browser
 Categories=Network;WebBrowser;

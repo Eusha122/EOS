@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+# This is intentionally a small, auditable gate.  Encrypted persistence is
+# added in Phase 3; until then option 2 returns safely to this menu.
+runtime_dir=/run/eos-privet
+mkdir -p "$runtime_dir"
+
+exec </dev/tty1 >/dev/tty1 2>&1
+
+while :; do
+  clear
+  cat <<'SCREEN'
+EOS PRIVET
+-----------
+1. Explore fresh
+2. Unlock saved storage
+
+Choose: 
+SCREEN
+  printf '> '
+  IFS= read -r choice || choice=''
+
+  case "$choice" in
+    1)
+      printf '%s\n' fresh > "$runtime_dir/session-mode"
+      printf '%s\n' 'Starting a fresh EOS Privet session...'
+      sleep 1
+      exit 0
+      ;;
+    2)
+      printf '%s\n\n' 'Saved storage is not configured in this test build yet.'
+      printf '%s' 'Nothing was unlocked. Press Enter to return to the menu. '
+      IFS= read -r ignored || true
+      ;;
+    *)
+      printf '%s' 'Type 1 or 2, then press Enter. '
+      sleep 1
+      ;;
+  esac
+done

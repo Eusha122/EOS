@@ -1,0 +1,16 @@
+[Unit]
+Description=EOS Privet pre-desktop session gate
+After=local-fs.target systemd-user-sessions.service
+Before=display-manager.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/eos-privet/boot-gate
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+RemainAfterExit=yes

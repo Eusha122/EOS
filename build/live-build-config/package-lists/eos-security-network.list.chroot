@@ -1,5 +1,2 @@
-# Network discovery and packet analysis for authorised work
-nmap
-wireshark
-tcpdump
-netcat-openbsd
+# Reserved for a later, optional authorised-security-tools profile.
+# Keeping the first privacy image small reduces its attack surface.

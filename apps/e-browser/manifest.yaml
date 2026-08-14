@@ -1,8 +1,5 @@
-id: e-browser
-display_name: E-Browser
-stage: scaffolded
-implementation: chromium-compatibility-launcher
-profile_directory: ~/.config/e-browser
-future_options:
-  - eos-maintained-chromium-package
-  - upstream-browser-fork
+id: e-browser-compatibility
+display_name: E-Browser compatibility layer
+stage: deprecated
+implementation: forwards-to-void-browser
+replacement: ../void/manifest.yaml

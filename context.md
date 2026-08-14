@@ -13,11 +13,13 @@ Last updated: 2026-08-15
 | Area | Decision |
 | --- | --- |
 | Product model | USB-live-first privacy OS with optional encrypted persistence on the same USB drive |
-| Distribution base | Debian-stable direction chosen for privacy and daily-use stability; current Kali scaffold is transitional until conversion |
+| Distribution base | Debian-stable direction chosen for privacy and daily-use stability; ISO source is now being converted from the former Kali scaffold |
+| Pinned first build base | Debian 13 (`trixie`), so builds use a named release rather than a moving `stable` label |
 | Initial architecture | `amd64` (64-bit x86 PCs) |
 | Desktop | KDE Plasma, Wayland preferred; X11 fallback retained |
 | Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
 | Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
+| Current Void implementation | Debian `torbrowser-launcher` behind an EOS `void-browser` launcher; upstream Tor Browser remains responsible for its privacy-sensitive browser code |
 | Privacy mode | Core product direction: Tails-inspired live mode with amnesic defaults, optional encrypted persistence, and Tor-first browsing |
 | Security promise | Reduce risk with tested, proven components; never claim EOS Privet is unhackable or fully anonymous |
 | Brand asset | `assets/branding/eos-logo.svg` |
@@ -45,6 +47,7 @@ Last updated: 2026-08-15
 8. Installation to internal disks is secondary to the USB-live experience.
 9. User-saved files must persist on the encrypted USB storage and remain available when booting the same USB on another PC.
 10. The desktop must not appear until the user chooses fresh mode or unlocks storage from the text boot gate.
+11. Keep the first ISO small: authorised security-testing tools will be an optional later profile, not default background attack surface.
 
 ## Open decisions
 
