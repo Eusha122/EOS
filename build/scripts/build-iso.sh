@@ -11,6 +11,45 @@ die() {
   exit 1
 }
 
+# Read one scalar from the release manifest. The key must appear exactly once at
+# the requested position: at the top level when no parent block is named, or as a
+# direct child of that block. Selecting a nested key by indentation alone would
+# let a future same-named key in another block silently supply the live identity,
+# so a missing, duplicated, or ambiguous key stops the build instead.
+manifest_scalar() {
+  local parent=$1
+  local key=$2
+
+  awk -v parent="$parent" -v key="$key" '
+    { line = $0; sub(/\r$/, "", line); entry = "" }
+    line ~ /^[ \t]*$/ || line ~ /^[ \t]*#/ { next }
+    line ~ /^[^ \t]/ {
+      section = ""
+      if (line ~ /^[A-Za-z0-9_.-]+:[ \t]*$/) {
+        section = line
+        sub(/:[ \t]*$/, "", section)
+        next
+      }
+      if (parent != "") next
+      entry = line
+    }
+    line ~ /^[ \t]/ {
+      if (parent == "" || section != parent || line !~ /^  [^ \t]/) next
+      entry = substr(line, 3)
+    }
+    {
+      if (entry == "" || index(entry, key ":") != 1) next
+      rest = substr(entry, length(key) + 2)
+      if (rest !~ /^[ \t]/) next
+      sub(/^[ \t]+/, "", rest)
+      sub(/[ \t]+$/, "", rest)
+      found++
+      value = rest
+    }
+    END { if (found != 1) exit 1; print value }
+  ' "$manifest"
+}
+
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 config_root="$project_root/build/live-build-config"
 manifest="$project_root/build/manifests/eos-release.yaml"
@@ -20,11 +59,16 @@ work_root="$project_root/build/.work/live-build"
 output_root="$project_root/out"
 
 [ -s "$manifest" ] || die "release manifest is missing or empty: $manifest"
-version="$(sed -n 's/^version: //{p;q;}' "$manifest")"
-architecture="$(sed -n 's/^architecture: //{p;q;}' "$manifest")"
-distribution="$(sed -n 's/^  distribution: //{p;q;}' "$manifest")"
-live_username="$(sed -n 's/^  username: //{p;q;}' "$manifest")"
-live_hostname="$(sed -n 's/^  hostname: //{p;q;}' "$manifest")"
+version="$(manifest_scalar '' version)" || \
+  die 'release manifest must define exactly one top-level version'
+architecture="$(manifest_scalar '' architecture)" || \
+  die 'release manifest must define exactly one top-level architecture'
+distribution="$(manifest_scalar base distribution)" || \
+  die 'release manifest must define exactly one base.distribution'
+live_username="$(manifest_scalar live username)" || \
+  die 'release manifest must define exactly one live.username'
+live_hostname="$(manifest_scalar live hostname)" || \
+  die 'release manifest must define exactly one live.hostname'
 theme_id=org.eos.privet.desktop
 wallpaper_name=1672x941.png
 iso_name="EOS-Privet-${version}-${architecture}.iso"
@@ -523,7 +567,9 @@ verify_required_tree() {
   local tree_root=$1
   local tree_label=$2
   local verification_mode=$3
+  local byte_exempt=${4:-}
 
+  EOS_BYTE_EXEMPT="$byte_exempt" \
   python3 - "$tree_root" "$tree_label" "$verification_mode" \
     "$required_symlink_map" "$chroot_root" "${required_live_files[@]}" <<'PY' || \
     die "$tree_label failed trusted-path verification"
@@ -542,6 +588,12 @@ mode = sys.argv[3]
 map_path = Path(sys.argv[4])
 reference_root = Path(sys.argv[5])
 required = sys.argv[6:]
+
+# Paths whose bytes legitimately differ between the validated chroot and the
+# shipped image. Ownership, mode, symlink safety, and presence are still
+# enforced; only the byte comparison is waived, and the caller must validate
+# such a file's contents by another route.
+byte_exempt = set(os.environ.get("EOS_BYTE_EXEMPT", "").split())
 
 
 def reject(message: str) -> None:
@@ -705,7 +757,7 @@ for relative in required:
                 "final ISO mode differs from the validated live filesystem: "
                 f"/{relative} ({final_mode:04o} != {reference_mode:04o})"
             )
-        if not files_equal(reference_path, final_path):
+        if relative not in byte_exempt and not files_equal(reference_path, final_path):
             reject(
                 f"final ISO bytes differ from the validated live filesystem: /{relative}"
             )
@@ -933,20 +985,19 @@ for forbidden_path in "${forbidden_paths[@]}"; do
     die "stock or stale desktop item remains: /$forbidden_path"
 done
 
-for forbidden_package in \
-  calamares \
-  firmware-b43-installer \
-  firmware-b43legacy-installer \
-  gimp \
+forbidden_packages=(
+  calamares
+  firmware-b43-installer
+  firmware-b43legacy-installer
+  gimp
   libreoffice-core
-do
+)
+for forbidden_package in "${forbidden_packages[@]}"; do
   forbidden_status="$(chroot "$chroot_root" dpkg-query -W -f='${db:Status-Status}' "$forbidden_package" 2>/dev/null || true)"
   [ "$forbidden_status" != installed ] || \
     die "forbidden package remains in the live system: $forbidden_package"
 done
 
-chroot "$chroot_root" dpkg-query -W -f='${binary:Package}\t${Version}\n' | \
-  LC_ALL=C sort > "$package_manifest_tmp"
 live_build_version="$(lb --version 2>&1)"
 live_build_version="${live_build_version%%$'\n'*}"
 {
@@ -1000,7 +1051,11 @@ unsquashfs -no-progress -match -follow -d "$final_root" "$final_squashfs" \
   "${required_live_files[@]}" >/dev/null || \
   die 'could not extract required files from the completed ISO SquashFS'
 
-verify_required_tree "$final_root" 'final ISO filesystem' verify
+# live-build installs its own boot-menu tooling into the chroot after the
+# SquashFS is frozen, so the chroot's package database is no longer the database
+# that ships. Its bytes cannot match, but its ownership, mode, and symlink safety
+# still must; the shipped contents are validated against the ISO further below.
+verify_required_tree "$final_root" 'final ISO filesystem' verify 'var/lib/dpkg/status'
 verify_required_executables "$final_root" 'final ISO filesystem'
 
 cmp -s "$wallpaper_root/cicada-default.png" \
@@ -1014,8 +1069,39 @@ done
 cmp -s "$branding_root/eos-logo.svg" \
   "$final_root/usr/share/icons/hicolor/scalable/apps/void-browser.svg" || \
   die 'final ISO Void icon does not match the selected source asset'
-cmp -s "$chroot_root/var/lib/dpkg/status" "$final_root/var/lib/dpkg/status" || \
-  die 'final ISO package database differs from the validated live filesystem'
+# The shipped database is the release record, so validate it directly rather than
+# trusting a chroot that live-build keeps modifying after the SquashFS is frozen.
+# Only var/lib/dpkg/status is extracted from the ISO, so read that file instead
+# of depending on dpkg-query opening a partial admin directory.
+shipped_package_status() {
+  awk -v want="$1" '
+    /^Package:[ \t]/ { pkg = $2; next }
+    /^Status:[ \t]/ { if (pkg == want) { print $4; exit } }
+  ' "$final_root/var/lib/dpkg/status"
+}
+
+for package_name in "${required_packages[@]}"; do
+  [ "$(shipped_package_status "$package_name")" = installed ] || \
+    die "final ISO is missing a required runtime package: $package_name"
+done
+for forbidden_package in "${forbidden_packages[@]}"; do
+  [ "$(shipped_package_status "$forbidden_package")" != installed ] || \
+    die "final ISO still contains a forbidden package: $forbidden_package"
+done
+
+awk '
+  /^Package:[ \t]/ { pkg = $2; ver = ""; st = ""; next }
+  /^Version:[ \t]/ { ver = $2; next }
+  /^Status:[ \t]/ { st = $4; next }
+  /^[ \t]*$/ {
+    if (pkg != "" && st == "installed") printf "%s\t%s\n", pkg, ver
+    pkg = ""; ver = ""; st = ""
+  }
+  END { if (pkg != "" && st == "installed") printf "%s\t%s\n", pkg, ver }
+' "$final_root/var/lib/dpkg/status" | \
+  LC_ALL=C sort > "$package_manifest_tmp"
+[ -s "$package_manifest_tmp" ] || \
+  die 'could not read the shipped package database from the completed ISO'
 
 grep -Fxq "LookAndFeelPackage=$theme_id" "$final_root/etc/xdg/kdeglobals" || \
   die 'final ISO does not select the EOS Global Theme system-wide'
