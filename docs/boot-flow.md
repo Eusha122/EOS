@@ -8,6 +8,10 @@ Before the graphical desktop starts, EOS Privet should show a simple full-screen
 
 The user should not need Linux knowledge. They should only need to read two choices and type a number.
 
+## Current implementation status
+
+The text gate and option `1` are implemented and have reached Plasma in the VM. Option `2` currently shows a safe, explicit “saved storage is not configured” message and returns to the gate. It does **not** unlock or create encrypted storage yet. The flows below describe the final persistence target and must not be presented as already delivered.
+
 ## Main flow
 
 On boot, show a quiet full-screen terminal interface. The first test ISO proved the gate appears before KDE and option `1` reaches KDE. It also showed that the current ASCII logo is too wide in the VM, so the next visual pass should use a narrower premium terminal banner.

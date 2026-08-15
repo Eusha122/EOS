@@ -85,16 +85,20 @@ The command must report `OK` before using the ISO in a VM or writing it to a USB
 6. Confirm the dark EOS default wallpaper appears, with a slim top bar and centered dock.
 7. Confirm the dock has Void, Dolphin, Konsole, and EOS Welcome with no blank icons.
 8. Confirm there is no KDE Welcome window, `Install Debian` shortcut, or blue Debian wallpaper.
+9. Open **System Information** and confirm the operating-system name is EOS Privet, not plain Debian.
 
 Open Konsole inside EOS and run these runtime checks:
 
 ```bash
 test "$(id -un)" = eos
+grep -Fx 'ID=eos-privet' /usr/lib/os-release
 grep -Fx phase2d-1 "$HOME/.config/eos-privet/desktop-schema"
 grep -F 'EOS desktop setup verified successfully.' "$HOME/.local/state/eos-privet/desktop-setup.log"
 grep -F 'LookAndFeelPackage=org.eos.privet.desktop' "$HOME/.config/kdeglobals"
-grep -F 'file:///usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png' \
-  "$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.dumpCurrentLayoutJS | \
+  grep -F 'file:///usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png'
+qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.dumpCurrentLayoutJS | \
+  grep -F 'applications:void-browser.desktop'
 ```
 
 Every command must succeed. If the desktop is wrong, show the contents of:

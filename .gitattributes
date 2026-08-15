@@ -13,6 +13,7 @@
 *.yml text eol=lf
 build/live-build-config/includes.chroot/usr/local/bin/* text eol=lf
 build/live-build-config/includes.chroot/usr/local/lib/eos-privet/* text eol=lf
+build/live-build-config/includes.chroot/usr/lib/os-release text eol=lf
 
 # Image assets must never be line-ending normalized.
 *.png binary

@@ -24,6 +24,7 @@ EOS/
 |   |   |   |   |-- systemd/       # Pre-desktop boot gate ordering
 |   |   |   |   `-- xdg/           # Global theme, favorites, and autostart
 |   |   |   `-- usr/
+|   |   |       |-- lib/            # EOS os-release identity over the Debian base
 |   |   |       |-- local/          # EOS boot/session programs
 |   |   |       `-- share/
 |   |   |           |-- applications/
@@ -51,7 +52,7 @@ EOS/
 
 `assets/branding/` and `assets/wallpapers/` are canonical source assets. The build script copies them into the staged live filesystem and verifies their bytes. Generated images and ISOs belong in `out/`.
 
-`build/manifests/eos-release.yaml` is the single source for the ISO version, Debian distribution, live username, hostname, and enabled/reserved profiles. The build injects this identity into the boot gate, SDDM, and theme metadata, then rejects mismatches.
+`build/manifests/eos-release.yaml` is the single source for the ISO version, Debian distribution, live username, hostname, and enabled/reserved profiles. The build injects this identity into the boot gate, SDDM, Plasma theme metadata, and `/usr/lib/os-release`, then rejects mismatches. EOS remains explicit about `ID_LIKE=debian`.
 
 `build/live-build-config/includes.chroot/usr/share/plasma/look-and-feel/org.eos.privet.desktop/` owns the Plasma 6 Global Theme defaults and deterministic first-session top-bar/dock layout. `/etc/xdg/kdeglobals` and `/etc/skel/.config/kdeglobals` select it before Plasma starts.
 
@@ -61,6 +62,6 @@ Hooks under `build/live-build-config/hooks/live/` own all privileged image clean
 
 `package-lists/eos-core.list.chroot` explicitly owns required desktop/runtime packages because APT recommendations are disabled. `eos-firmware.list.chroot` owns the reviewed common-PC firmware set. Security package lists are reserved for later opt-in profiles and are not enabled by the current manifest.
 
-`build/scripts/build-iso.sh` owns source checks, isolated staging, live-build configuration, chroot validation, artifact naming, checksum creation, resolved package recording, and build information. It must reject an ISO when EOS theme metadata, wallpaper bytes, required packages, launcher IDs, desktop entries, user identity, or forbidden stock packages are wrong.
+`build/scripts/build-iso.sh` owns source checks, isolated staging, live-build configuration, chroot validation, completed-ISO extraction/validation, artifact naming, checksum creation, resolved package recording, and build information. It must reject an ISO when EOS theme metadata, wallpaper bytes, required packages, launcher IDs, desktop entries, trusted-file ownership, user identity, BIOS/UEFI boot arguments, or forbidden stock packages are wrong. The checksum is published last as the completion marker.
 
 `.gitattributes` keeps scripts, hooks, services, desktop files, JavaScript, JSON, and manifests on Unix LF line endings even when edited on Windows.

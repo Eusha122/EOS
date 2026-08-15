@@ -104,6 +104,7 @@ for source_file in \
   "$wallpaper_root/cicada-01.png" \
   "$wallpaper_root/cicada-02.png" \
   "$wallpaper_root/cicada-03.png" \
+  "$config_root/includes.chroot/usr/lib/os-release" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/metadata.json" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/defaults" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" \
@@ -192,10 +193,15 @@ sed -i \
 sed -i \
   -e "s/@EOS_VERSION@/$version/g" \
   "$work_root/config/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/metadata.json"
+sed -i \
+  -e "s/@EOS_VERSION@/$version/g" \
+  -e "s/@EOS_BASE_CODENAME@/$distribution/g" \
+  "$work_root/config/includes.chroot/usr/lib/os-release"
 
 if grep -R -n -F '@EOS_' \
   "$work_root/config/includes.chroot/usr/local/lib/eos-privet/boot-gate" \
   "$work_root/config/includes.chroot/etc/sddm.conf.d/eos-live.conf" \
+  "$work_root/config/includes.chroot/usr/lib/os-release" \
   "$work_root/config/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/metadata.json"
 then
   die 'an unresolved EOS build placeholder remains'
@@ -261,6 +267,7 @@ required_live_files=(
   usr/local/bin/eos-wallpapers
   usr/local/bin/eos-welcome
   usr/local/bin/void-browser
+  usr/lib/os-release
   var/lib/dpkg/status
   etc/sddm.conf.d/eos-live.conf
   etc/systemd/system/eos-boot-gate.service
@@ -409,6 +416,12 @@ grep -Fq "\"Version\": \"$version\"" \
 grep -Fq 'Image=EOSPrivet' \
   "$chroot_root/usr/share/plasma/look-and-feel/$theme_id/contents/defaults" || \
   die 'EOS Global Theme does not select the EOS wallpaper package'
+grep -Fxq 'ID=eos-privet' "$chroot_root/usr/lib/os-release" || \
+  die 'live system identity is not EOS Privet'
+grep -Fxq 'ID_LIKE=debian' "$chroot_root/usr/lib/os-release" || \
+  die 'live system identity does not disclose its Debian base'
+grep -Fxq "BUILD_ID=\"$version\"" "$chroot_root/usr/lib/os-release" || \
+  die 'live system identity version does not match the release manifest'
 grep -Fq "file:///usr/share/wallpapers/EOSPrivet/contents/images/$wallpaper_name" \
   "$chroot_root/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" || \
   die 'EOS layout does not select the exact installed wallpaper'
@@ -533,26 +546,14 @@ done
 xorriso -osirrox on -indev "$iso_artifact" \
   -extract /live/filesystem.squashfs "$final_squashfs" >/dev/null 2>&1 || \
   die 'the completed ISO does not contain /live/filesystem.squashfs'
-unsquashfs -ll "$final_squashfs" > "$final_listing" || \
+unsquashfs -lln "$final_squashfs" > "$final_listing" || \
   die 'could not list the completed ISO SquashFS'
 
-# Selective extraction keeps validation fast and disk usage bounded. Include
-# resolved executable targets as well as the visible symlink names so the final
-# check never follows an absolute in-image symlink into the builder host.
-final_extract_files=( "${required_live_files[@]}" )
-for executable_path in "${required_executable_files[@]}"; do
-  if [ -L "$chroot_root/$executable_path" ]; then
-    executable_target="$(chroot "$chroot_root" readlink -f "/$executable_path")" || \
-      die "could not resolve executable symlink: /$executable_path"
-    case "$executable_target" in
-      /*) final_extract_files+=( "${executable_target#/}" ) ;;
-      *) die "executable symlink resolved outside the live filesystem: /$executable_path" ;;
-    esac
-  fi
-done
-
-unsquashfs -no-progress -d "$final_root" "$final_squashfs" \
-  "${final_extract_files[@]}" >/dev/null || \
+# Selective extraction keeps validation fast and disk usage bounded. `-match`
+# rejects a missing requested path, while `-follow` also extracts everything
+# needed to resolve a requested symlink inside the image.
+unsquashfs -no-progress -match -follow -d "$final_root" "$final_squashfs" \
+  "${required_live_files[@]}" >/dev/null || \
   die 'could not extract required files from the completed ISO SquashFS'
 
 verify_required_tree "$final_root" 'final ISO filesystem'
@@ -590,6 +591,10 @@ cmp -s "$chroot_root/var/lib/dpkg/status" "$final_root/var/lib/dpkg/status" || \
 
 grep -Fxq "LookAndFeelPackage=$theme_id" "$final_root/etc/xdg/kdeglobals" || \
   die 'final ISO does not select the EOS Global Theme system-wide'
+grep -Fxq 'ID=eos-privet' "$final_root/usr/lib/os-release" || \
+  die 'final ISO system identity is not EOS Privet'
+grep -Fxq "BUILD_ID=\"$version\"" "$final_root/usr/lib/os-release" || \
+  die 'final ISO system identity version does not match the release manifest'
 grep -Fq "$wallpaper_name" \
   "$final_root/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" || \
   die 'final ISO layout does not reference the installed EOS wallpaper'
@@ -628,11 +633,22 @@ mv "$package_manifest_tmp" "$publish_packages_tmp"
 mv "$build_info_tmp" "$publish_build_info_tmp"
 mv "$checksum_tmp" "$publish_checksum_tmp"
 
+staged_digest="$(sha256sum "$publish_iso_tmp" | awk '{print $1}')"
+[ "$staged_digest" = "$iso_digest" ] || \
+  die 'staged publication ISO differs from the validated ISO'
+
+# Remove the old completion marker immediately before replacing same-version
+# development artifacts. If publication is interrupted, no checksum remains to
+# make the partial set look complete.
+rm -f "$output_root/$iso_name.sha256"
 mv -f "$publish_packages_tmp" "$output_root/$package_manifest_name"
 mv -f "$publish_build_info_tmp" "$output_root/$build_info_name"
 mv -f "$publish_iso_tmp" "$output_root/$iso_name"
-(cd "$output_root" && sha256sum --check ".$iso_name.sha256.new.$$")
 mv -f "$publish_checksum_tmp" "$output_root/$iso_name.sha256"
+if ! (cd "$output_root" && sha256sum --check "$iso_name.sha256"); then
+  rm -f "$output_root/$iso_name.sha256"
+  die 'published ISO failed its final checksum verification'
+fi
 
 printf 'EOS Privet ISO written to %s\n' "$output_root/$iso_name"
 printf 'Checksum written to %s\n' "$output_root/$iso_name.sha256"

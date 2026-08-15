@@ -1,0 +1,13 @@
+PRETTY_NAME="EOS Privet @EOS_VERSION@ (Development Preview)"
+NAME="EOS Privet"
+VERSION_ID="@EOS_VERSION@"
+VERSION="@EOS_VERSION@ (Development Preview)"
+VERSION_CODENAME=@EOS_BASE_CODENAME@
+ID=eos-privet
+ID_LIKE=debian
+BUILD_ID="@EOS_VERSION@"
+VARIANT="Privacy-first USB live development preview"
+VARIANT_ID=live
+DEBIAN_CODENAME=@EOS_BASE_CODENAME@
+ANSI_COLOR="0;36"
+LOGO=eos-privet

@@ -14,7 +14,7 @@ if [ "${1:-}" = "--autostart" ]; then
   # Plasma with an arbitrary fixed delay or accept an older schema marker.
   attempt=0
   recorded_schema=
-  while [ "$attempt" -lt 45 ]; do
+  while [ "$attempt" -lt 150 ]; do
     if [ -r "$desktop_marker" ]; then
       recorded_schema=$(cat "$desktop_marker" 2>/dev/null || true)
       [ "$recorded_schema" = "$schema_version" ] && break

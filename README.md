@@ -34,7 +34,7 @@ Build the ISO from Linux, not directly from Windows. The tested and supported pr
 sudo bash build/scripts/build-iso.sh
 ```
 
-The output is written to `out/`. Build scripts intentionally keep generated files out of the source tree.
+The output is written to `out/`. Before publishing it, the build opens the completed ISO and verifies its SquashFS payload, EOS identity and wallpaper bytes, trusted-file ownership, and BIOS/UEFI live-user arguments. Build scripts intentionally keep generated files out of the source tree.
 
 ## First milestones
 
