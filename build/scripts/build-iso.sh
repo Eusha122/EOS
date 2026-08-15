@@ -177,6 +177,7 @@ for source_file in \
   "$wallpaper_root/cicada-03.png" \
   "$config_root/includes.chroot/usr/lib/os-release" \
   "$config_root/includes.chroot/usr/local/lib/eos-privet/verify-plasma-layout" \
+  "$project_root/build/tests/test_verify_plasma_layout.py" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/metadata.json" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/defaults" \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" \
@@ -237,6 +238,8 @@ import sys
 path = Path(sys.argv[1])
 compile(path.read_text(encoding="utf-8"), str(path), "exec")
 PY
+python3 "$project_root/build/tests/test_verify_plasma_layout.py" || \
+  die 'EOS Plasma layout verifier regression tests failed'
 
 active_mounts="$(mounts_below_work_root)"
 [ -z "$active_mounts" ] || {
@@ -586,10 +589,17 @@ required_executable_files=(
   usr/local/bin/eos-wallpapers
   usr/local/bin/eos-welcome
   usr/local/bin/void-browser
+  usr/bin/live-config
   usr/bin/qdbus6
   usr/bin/kwriteconfig6
   usr/bin/kpackagetool6
+  usr/bin/desktop-file-validate
   usr/bin/plasma-apply-wallpaperimage
+  usr/bin/systemsettings
+  usr/bin/dolphin
+  usr/bin/konsole
+  usr/bin/kinfocenter
+  usr/bin/python3
 )
 
 verify_required_executables() {
