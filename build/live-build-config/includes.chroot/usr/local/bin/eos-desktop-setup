@@ -18,6 +18,7 @@ log_dir="$state_home/eos-privet"
 log="$log_dir/desktop-setup.log"
 plasma_config="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
 layout_snapshot="$log_dir/live-layout.js"
+layout_previous="$log_dir/live-layout.previous.js"
 layout_backup="$log_dir/plasma-layout.before-$schema_version.conf"
 
 mkdir -p "$marker_dir" "$log_dir"
@@ -84,17 +85,27 @@ live_layout_matches_schema() {
     grep -Fq "$wallpaper_uri" "$layout_snapshot"
 }
 
-plasma_screen_is_ready() {
-  ready_state=$(qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.isScreenUiReady 0 2>/dev/null || true)
-  [ "$ready_state" = true ]
+live_layout_is_loaded() {
+  [ -s "$layout_snapshot" ] &&
+    grep -Fq 'var layout = {' "$layout_snapshot" &&
+    grep -Fq '"desktops": [' "$layout_snapshot" &&
+    grep -Fq '"wallpaperPlugin":' "$layout_snapshot" &&
+    grep -Fq '"panels": [' "$layout_snapshot"
 }
 
 wait_for_plasma_ready() {
+  rm -f "$layout_previous"
   attempt=0
+  stable_snapshots=0
   while [ "$attempt" -lt 45 ]; do
-    if plasma_screen_is_ready && capture_live_layout && [ -s "$layout_snapshot" ]; then
-      return 0
+    if capture_live_layout && live_layout_is_loaded; then
+      if [ -s "$layout_previous" ] && cmp -s "$layout_snapshot" "$layout_previous"; then
+        stable_snapshots=$((stable_snapshots + 1))
+        [ "$stable_snapshots" -ge 1 ] && return 0
+      else
+        stable_snapshots=0
+        cp "$layout_snapshot" "$layout_previous" || return 1
+      fi
     fi
     attempt=$((attempt + 1))
     sleep 1

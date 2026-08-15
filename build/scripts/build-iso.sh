@@ -30,11 +30,16 @@ package_manifest_name="EOS-Privet-${version}-amd64.packages.tsv"
 build_info_name="EOS-Privet-${version}-amd64.build-info.txt"
 package_manifest_tmp="$work_root/$package_manifest_name"
 build_info_tmp="$work_root/$build_info_name"
+checksum_tmp="$work_root/$iso_name.sha256"
+publish_iso_tmp="$output_root/.$iso_name.new.$$"
+publish_checksum_tmp="$output_root/.$iso_name.sha256.new.$$"
+publish_packages_tmp="$output_root/.$package_manifest_name.new.$$"
+publish_build_info_tmp="$output_root/.$build_info_name.new.$$"
 
 [ "$(id -u)" -eq 0 ] || \
   die 'run this build as root (for example: sudo bash build/scripts/build-iso.sh)'
 
-for command_name in awk chown chroot cmp cp find findmnt grep install lb mv python3 rm sed sh sha256sum sort stat unsquashfs xorriso; do
+for command_name in awk chmod chown chroot cmp cp find findmnt grep install lb mkdir mv python3 readlink rm sed sh sha256sum sort stat unsquashfs xorriso; do
   command -v "$command_name" >/dev/null 2>&1 || \
     die "required build command is missing: $command_name"
 done
@@ -73,6 +78,11 @@ mounts_below_work_root() {
 report_interrupted_build() {
   exit_status=$?
   trap - EXIT
+  rm -f -- \
+    "$publish_iso_tmp" \
+    "$publish_checksum_tmp" \
+    "$publish_packages_tmp" \
+    "$publish_build_info_tmp" 2>/dev/null || true
   if [ "$exit_status" -ne 0 ]; then
     remaining_mounts="$(mounts_below_work_root || true)"
     if [ -n "$remaining_mounts" ]; then
@@ -87,11 +97,6 @@ report_interrupted_build() {
 trap report_interrupted_build EXIT
 
 mkdir -p "$output_root"
-rm -f \
-  "$output_root/$iso_name" \
-  "$output_root/$iso_name.sha256" \
-  "$output_root/$package_manifest_name" \
-  "$output_root/$build_info_name"
 
 for source_file in \
   "$branding_root/eos-logo.svg" \
@@ -256,6 +261,7 @@ required_live_files=(
   usr/local/bin/eos-wallpapers
   usr/local/bin/eos-welcome
   usr/local/bin/void-browser
+  var/lib/dpkg/status
   etc/sddm.conf.d/eos-live.conf
   etc/systemd/system/eos-boot-gate.service
   etc/systemd/system/display-manager.service.d/eos-boot-gate.conf
@@ -300,8 +306,9 @@ required_live_files=(
 )
 
 verify_required_tree() {
-  tree_root=$1
-  tree_label=$2
+  local tree_root=$1
+  local tree_label=$2
+  local relative_path full_path owner mode
 
   for relative_path in "${required_live_files[@]}"; do
     full_path="$tree_root/$relative_path"
@@ -322,19 +329,29 @@ verify_required_tree() {
 
 verify_required_tree "$chroot_root" 'built live filesystem'
 
-for executable_path in \
-  usr/local/lib/eos-privet/boot-gate \
-  usr/local/bin/eos-desktop-setup \
-  usr/local/bin/eos-welcome \
-  usr/local/bin/void-browser \
-  usr/bin/qdbus6 \
-  usr/bin/kwriteconfig6 \
-  usr/bin/kpackagetool6 \
+required_executable_files=(
+  usr/local/lib/eos-privet/boot-gate
+  usr/local/bin/eos-desktop-setup
+  usr/local/bin/eos-welcome
+  usr/local/bin/void-browser
+  usr/bin/qdbus6
+  usr/bin/kwriteconfig6
+  usr/bin/kpackagetool6
   usr/bin/plasma-apply-wallpaperimage
-do
-  [ -x "$chroot_root/$executable_path" ] || \
-    die "required executable is not executable: /$executable_path"
-done
+)
+
+verify_required_executables() {
+  local tree_root=$1
+  local tree_label=$2
+  local executable_path
+
+  for executable_path in "${required_executable_files[@]}"; do
+    [ -x "$tree_root/$executable_path" ] || \
+      die "$tree_label has a non-executable runtime file: /$executable_path"
+  done
+}
+
+verify_required_executables "$chroot_root" 'built live filesystem'
 
 required_packages=(
   breeze
@@ -438,7 +455,9 @@ theme_list="$(chroot "$chroot_root" /usr/bin/kpackagetool6 \
   printf '%s\n' "$theme_list" >&2
   die 'KPackage could not enumerate Plasma Global Themes'
 }
-printf '%s\n' "$theme_list" | grep -Fq "$theme_id" || \
+printf '%s\n' "$theme_list" | \
+  sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | \
+  grep -Fxq "$theme_id" || \
   die 'KPackage does not recognize the EOS Plasma Global Theme'
 
 expected_user_line="User=$live_username"
@@ -447,15 +466,16 @@ grep -Fxq "$expected_user_line" "$chroot_root/etc/sddm.conf.d/eos-live.conf" || 
 grep -Fq "id $live_username" "$chroot_root/usr/local/lib/eos-privet/boot-gate" || \
   die 'boot-gate identity does not match the release manifest'
 
-for forbidden_path in \
-  usr/bin/plasma-welcome \
-  usr/share/applications/org.kde.plasma-welcome.desktop \
-  usr/share/applications/debian-installer-launcher.desktop \
-  usr/share/applications/install-debian.desktop \
-  etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc \
-  usr/share/wallpapers/EOSPrivet/contents/images/cicada-default.png \
+forbidden_paths=(
+  usr/bin/plasma-welcome
+  usr/share/applications/org.kde.plasma-welcome.desktop
+  usr/share/applications/debian-installer-launcher.desktop
+  usr/share/applications/install-debian.desktop
+  etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc
+  usr/share/wallpapers/EOSPrivet/contents/images/cicada-default.png
   usr/share/wallpapers/EOSPrivet/contents/images/1920x1080.svg
-do
+)
+for forbidden_path in "${forbidden_paths[@]}"; do
   [ ! -e "$chroot_root/$forbidden_path" ] || \
     die "stock or stale desktop item remains: /$forbidden_path"
 done
@@ -469,7 +489,7 @@ for forbidden_package in \
 do
   forbidden_status="$(chroot "$chroot_root" dpkg-query -W -f='${db:Status-Status}' "$forbidden_package" 2>/dev/null || true)"
   [ "$forbidden_status" != installed ] || \
-    die "download-at-install firmware package remains: $forbidden_package"
+    die "forbidden package remains in the live system: $forbidden_package"
 done
 
 chroot "$chroot_root" dpkg-query -W -f='${binary:Package}\t${Version}\n' | \
@@ -489,21 +509,130 @@ live_build_version="${live_build_version%%$'\n'*}"
   printf 'live_build_version=%s\n' "$live_build_version"
 } > "$build_info_tmp"
 
-shopt -s nullglob
-artifacts=( *.iso )
-[ "${#artifacts[@]}" -eq 1 ] || \
-  die "expected exactly one ISO artifact from live-build; found ${#artifacts[@]}"
+# Do not trust only live-build's mutable chroot: open the completed ISO and
+# validate the actual SquashFS and both BIOS/UEFI boot configurations that will
+# reach users. This turns missing branding into a build failure, not a surprise
+# seen after a slow VM reboot.
+final_squashfs="$work_root/final-filesystem.squashfs"
+final_root="$work_root/final-root"
+final_listing="$work_root/final-squashfs.list"
+iso_grub_config="$work_root/final-grub.cfg"
+iso_isolinux_config="$work_root/final-isolinux-live.cfg"
 
-rm -f \
-  "$output_root/$iso_name" \
-  "$output_root/$iso_name.sha256" \
-  "$output_root/$package_manifest_name" \
-  "$output_root/$build_info_name"
-mv "${artifacts[0]}" "$output_root/$iso_name"
-mv "$package_manifest_tmp" "$output_root/$package_manifest_name"
-mv "$build_info_tmp" "$output_root/$build_info_name"
-(cd "$output_root" && sha256sum "$iso_name" > "$iso_name.sha256")
-(cd "$output_root" && sha256sum --check "$iso_name.sha256")
+for validation_path in \
+  "$final_squashfs" \
+  "$final_root" \
+  "$final_listing" \
+  "$iso_grub_config" \
+  "$iso_isolinux_config"
+do
+  [ ! -e "$validation_path" ] || \
+    die "unexpected stale final-ISO validation path: $validation_path"
+done
+
+xorriso -osirrox on -indev "$iso_artifact" \
+  -extract /live/filesystem.squashfs "$final_squashfs" >/dev/null 2>&1 || \
+  die 'the completed ISO does not contain /live/filesystem.squashfs'
+unsquashfs -ll "$final_squashfs" > "$final_listing" || \
+  die 'could not list the completed ISO SquashFS'
+
+# Selective extraction keeps validation fast and disk usage bounded. Include
+# resolved executable targets as well as the visible symlink names so the final
+# check never follows an absolute in-image symlink into the builder host.
+final_extract_files=( "${required_live_files[@]}" )
+for executable_path in "${required_executable_files[@]}"; do
+  if [ -L "$chroot_root/$executable_path" ]; then
+    executable_target="$(chroot "$chroot_root" readlink -f "/$executable_path")" || \
+      die "could not resolve executable symlink: /$executable_path"
+    case "$executable_target" in
+      /*) final_extract_files+=( "${executable_target#/}" ) ;;
+      *) die "executable symlink resolved outside the live filesystem: /$executable_path" ;;
+    esac
+  fi
+done
+
+unsquashfs -no-progress -d "$final_root" "$final_squashfs" \
+  "${final_extract_files[@]}" >/dev/null || \
+  die 'could not extract required files from the completed ISO SquashFS'
+
+verify_required_tree "$final_root" 'final ISO filesystem'
+
+for executable_path in "${required_executable_files[@]}"; do
+  if [ -L "$chroot_root/$executable_path" ]; then
+    [ -L "$final_root/$executable_path" ] || \
+      die "final ISO changed an executable symlink into another file type: /$executable_path"
+    [ "$(readlink "$final_root/$executable_path")" = "$(readlink "$chroot_root/$executable_path")" ] || \
+      die "final ISO executable symlink differs from the validated live filesystem: /$executable_path"
+    executable_target="$(chroot "$chroot_root" readlink -f "/$executable_path")"
+    final_target="$final_root/${executable_target#/}"
+    [ -x "$final_target" ] || \
+      die "final ISO is missing the executable target for /$executable_path"
+    target_owner="$(stat -c '%u:%g' -- "$final_target")"
+    [ "$target_owner" = 0:0 ] || \
+      die "final ISO executable target has non-root ownership: /${executable_target#/} ($target_owner)"
+    target_mode="$(stat -c '%a' -- "$final_target")"
+    (( (8#$target_mode & 8#022) == 0 )) || \
+      die "final ISO executable target is group/world-writable: /${executable_target#/} ($target_mode)"
+  else
+    [ -x "$final_root/$executable_path" ] || \
+      die "final ISO has a non-executable runtime file: /$executable_path"
+  fi
+done
+
+cmp -s "$wallpaper_root/cicada-default.png" \
+  "$final_root/usr/share/wallpapers/EOSPrivet/contents/images/$wallpaper_name" || \
+  die 'final ISO wallpaper does not match the selected source asset'
+cmp -s "$branding_root/eos-logo.svg" \
+  "$final_root/usr/share/icons/hicolor/scalable/apps/void-browser.svg" || \
+  die 'final ISO Void icon does not match the selected source asset'
+cmp -s "$chroot_root/var/lib/dpkg/status" "$final_root/var/lib/dpkg/status" || \
+  die 'final ISO package database differs from the validated live filesystem'
+
+grep -Fxq "LookAndFeelPackage=$theme_id" "$final_root/etc/xdg/kdeglobals" || \
+  die 'final ISO does not select the EOS Global Theme system-wide'
+grep -Fq "$wallpaper_name" \
+  "$final_root/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" || \
+  die 'final ISO layout does not reference the installed EOS wallpaper'
+python3 -m json.tool \
+  "$final_root/usr/share/plasma/look-and-feel/$theme_id/metadata.json" >/dev/null || \
+  die 'final ISO contains invalid EOS Global Theme metadata'
+
+for forbidden_path in "${forbidden_paths[@]}"; do
+  if grep -Fq "squashfs-root/$forbidden_path" "$final_listing"; then
+    die "final ISO still contains a stock or stale desktop item: /$forbidden_path"
+  fi
+done
+
+xorriso -osirrox on -indev "$iso_artifact" \
+  -extract /boot/grub/grub.cfg "$iso_grub_config" >/dev/null 2>&1 || \
+  die 'the completed ISO does not contain the UEFI GRUB configuration'
+xorriso -osirrox on -indev "$iso_artifact" \
+  -extract /isolinux/live.cfg "$iso_isolinux_config" >/dev/null 2>&1 || \
+  die 'the completed ISO does not contain the BIOS live configuration'
+
+for boot_config in "$iso_grub_config" "$iso_isolinux_config"; do
+  grep -Fq "username=$live_username" "$boot_config" || \
+    die "boot configuration has the wrong live username: $boot_config"
+  grep -Fq "hostname=$live_hostname" "$boot_config" || \
+    die "boot configuration has the wrong live hostname: $boot_config"
+done
+
+iso_digest="$(sha256sum "$iso_artifact" | awk '{print $1}')"
+[ "${#iso_digest}" -eq 64 ] || die 'could not calculate the completed ISO SHA-256 digest'
+printf '%s  %s\n' "$iso_digest" "$iso_name" > "$checksum_tmp"
+
+# Stage every publication file first. The checksum is renamed last and acts as
+# the completion marker, so a failed build cannot be mistaken for a release.
+mv "$iso_artifact" "$publish_iso_tmp"
+mv "$package_manifest_tmp" "$publish_packages_tmp"
+mv "$build_info_tmp" "$publish_build_info_tmp"
+mv "$checksum_tmp" "$publish_checksum_tmp"
+
+mv -f "$publish_packages_tmp" "$output_root/$package_manifest_name"
+mv -f "$publish_build_info_tmp" "$output_root/$build_info_name"
+mv -f "$publish_iso_tmp" "$output_root/$iso_name"
+(cd "$output_root" && sha256sum --check ".$iso_name.sha256.new.$$")
+mv -f "$publish_checksum_tmp" "$output_root/$iso_name.sha256"
 
 printf 'EOS Privet ISO written to %s\n' "$output_root/$iso_name"
 printf 'Checksum written to %s\n' "$output_root/$iso_name.sha256"
