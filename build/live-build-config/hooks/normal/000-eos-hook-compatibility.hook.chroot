@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+# live-build 1:20250505+deb13u1 only enters its chroot hook runner when both
+# hooks/normal and hooks/live contain a hook. Keep this harmless compatibility
+# hook so the EOS hooks under hooks/live are always executed.
+exit 0

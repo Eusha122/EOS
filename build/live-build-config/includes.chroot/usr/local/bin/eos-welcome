@@ -2,10 +2,20 @@
 set -eu
 
 shown_marker="${XDG_RUNTIME_DIR:-/tmp}/eos-privet-welcome-shown"
+desktop_marker="${XDG_CONFIG_HOME:-$HOME/.config}/eos-privet/desktop-schema"
 
 if [ "${1:-}" = "--autostart" ]; then
   [ -e "$shown_marker" ] && exit 0
   : > "$shown_marker"
+
+  # Open only after the versioned desktop setup has succeeded. Do not race
+  # Plasma with an arbitrary fixed delay.
+  attempt=0
+  while [ ! -r "$desktop_marker" ] && [ "$attempt" -lt 45 ]; do
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  [ -r "$desktop_marker" ] || exit 0
 fi
 
 message='<h2>Welcome to EOS Privet</h2>
@@ -13,7 +23,7 @@ message='<h2>Welcome to EOS Privet</h2>
 <p><b>Void</b> is the privacy browser. It uses the Tor Browser path, but Tor cannot make unsafe downloads, logins, or compromised hardware safe.</p>
 <p>Use the folder icon for files, the network icon for Wi-Fi, and the power menu when you are finished.</p>'
 
-if kdialog --title 'EOS Privet · Fresh session' \
+if kdialog --title 'EOS Privet - Fresh session' \
   --yesno "$message" \
   --yes-label 'Open Void' \
   --no-label 'Continue'; then

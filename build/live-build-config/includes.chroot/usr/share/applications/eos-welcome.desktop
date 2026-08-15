@@ -4,6 +4,6 @@ Type=Application
 Name=Start Here — EOS Privet
 Comment=Fresh-session privacy and daily-use guide
 Exec=eos-welcome
-Icon=help-about
+Icon=eos-privet
 Categories=Utility;System;
 Terminal=false

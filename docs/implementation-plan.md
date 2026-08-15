@@ -41,18 +41,18 @@ Security principles for every phase:
 ### Phase 1 — Repeatable ISO foundation
 
 - [x] Set up a clean Linux build VM (Debian 13 VM produced the first ISO artifact).
-- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13, rebuilt, and boot-tested in UEFI VirtualBox; repeat-build verification remains).
+- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13, rebuilt, and boot-tested in UEFI VirtualBox; first `phase2b` attempt exposed automatic firmware/recommendation expansion, which is now replaced by explicit package selection and a guard against download-at-install Broadcom packages; repeat-build verification remains).
 - [-] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible (first UEFI VirtualBox boot reached the live menu, EOS gate, and KDE Fresh desktop).
-- [-] Record exact build commands and package versions (documented local-copy workflow; final package/version record still pending a successful build).
+- [-] Record exact build commands and package versions (Phase 2d writes a resolved package TSV and build-information file beside the ISO; successful rebuild verification remains).
 - [x] Add an ISO checksum and verification instructions.
 
 **Done when:** the same source creates a bootable test ISO twice, and both builds can be checked with a checksum.
 
 ### Phase 2 — Fresh live session
 
-- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (first KDE desktop reached; user-supplied Cicada IV wallpaper is now the default, three alternatives are selectable, and source includes installer/welcome cleanup plus a Fresh-mode guide; rebuilt ISO test pending).
+- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (Phase 2c restored live-user creation. Phase 2d explicitly restores settings, power, display, portal, audio, policy-agent, icon, and font packages that recommendation trimming had omitted; clean build and VM checks remain).
 - [ ] Ensure normal session data is temporary and does not use the host computer's internal disk.
-- [ ] Add safe shutdown and “fresh session” explanations in the welcome screen.
+- [-] Add safe shutdown and “fresh session” explanations in the welcome screen (plain-language source exists and waits for verified desktop setup; Phase 2d VM interaction test remains).
 - [ ] Test graphics, Wi-Fi, keyboard, touchpad, and shutdown in VirtualBox.
 
 **Done when:** selecting Fresh starts a usable desktop and its test files disappear after restart.
@@ -81,10 +81,10 @@ Security principles for every phase:
 
 ### Phase 5 — Daily-use desktop and EOS visual system
 
-- [ ] Create an original EOS Privet Plasma theme using the supplied logo.
-- [ ] Configure a smooth, restrained macOS-inspired top bar, dock, icons, login screen, and wallpaper.
+- [-] Create an original EOS Privet Plasma theme using the supplied logo (valid Plasma 6 Global Theme, dark defaults, EOS icons, and discoverable Cicada IV wallpaper package are implemented; VM verification remains).
+- [-] Configure a smooth, restrained macOS-inspired top bar, dock, icons, login screen, and wallpaper (deterministic top bar and centered native Plasma dock are implemented; SDDM visual branding and animation tuning remain).
 - [ ] Provide a reduced-effects option for older PCs.
-- [ ] Add welcome, Wi-Fi, file-saving, and privacy help screens in plain language.
+- [-] Add welcome, Wi-Fi, file-saving, and privacy help screens in plain language (the first Fresh-mode guide exists; saved-storage guidance and VM verification remain).
 - [ ] Keep the future `eos-desktop-app` isolated behind its existing package boundary.
 
 **Done when:** a new user can boot, join Wi-Fi, browse, save an encrypted file, and shut down without needing terminal knowledge after the boot menu.

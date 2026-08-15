@@ -1,19 +1,24 @@
 name: EOS Privet
-version: 0.1.0-dev
+version: 0.1.0-phase2d
 architecture: amd64
 base:
   distribution: trixie
   image: live-hybrid-iso
+live:
+  username: eos
+  hostname: eos-privet
 desktop:
   session: KDE Plasma
   preferred_display_server: Wayland
-  fallback_display_server: X11
+  fallback_display_server: none-in-phase2d
 components:
   browser: void-browser
   future_desktop_app: eos-desktop-app
 profiles:
-  - core
-  - web
-  - network
-  - forensics
-  - wireless
+  enabled:
+    - core
+  reserved:
+    - web-security
+    - network-security
+    - forensics-security
+    - wireless-security

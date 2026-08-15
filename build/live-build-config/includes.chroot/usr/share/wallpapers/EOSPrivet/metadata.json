@@ -1,0 +1,17 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "EOS Privet Project"
+      }
+    ],
+    "Description": "Cicada IV, the default EOS Privet wallpaper",
+    "Id": "EOSPrivet",
+    "License": "Proprietary",
+    "Name": "EOS Privet - Cicada IV"
+  },
+  "X-KDE-PlasmaImageWallpaper-AccentColor": {
+    "Dark": "#9ca3af",
+    "Light": "#34363b"
+  }
+}

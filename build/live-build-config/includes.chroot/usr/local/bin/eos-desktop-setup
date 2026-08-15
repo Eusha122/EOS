@@ -1,21 +1,103 @@
 #!/bin/sh
-set -eu
+set -u
 
-# This runs within the Plasma session. Keep it deliberately small: the live
-# desktop is temporary, and later encrypted persistence may supply its own
-# settings instead of silently overwriting them.
-wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/cicada-default.png
+# Plasma reads the EOS Global Theme before first login. This script is a
+# bounded, versioned repair path for incomplete first-session configuration;
+# it is not the primary theming mechanism and it never overwrites a later
+# persisted user's layout after this schema has been applied successfully.
+theme_id=org.eos.privet.desktop
+schema_version=phase2d-1
+wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png
+layout=/usr/share/plasma/look-and-feel/org.eos.privet.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+marker_dir="$config_home/eos-privet"
+marker="$marker_dir/desktop-schema"
+log_dir="$state_home/eos-privet"
+log="$log_dir/desktop-setup.log"
+plasma_config="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
 
-if command -v plasma-apply-wallpaperimage >/dev/null 2>&1; then
-  plasma-apply-wallpaperimage "$wallpaper" >/dev/null 2>&1 || true
+mkdir -p "$marker_dir" "$log_dir"
+exec >>"$log" 2>&1
+
+printf '%s\n' 'EOS desktop setup started'
+date -u '+%Y-%m-%dT%H:%M:%SZ'
+
+fail() {
+  message=$1
+  printf 'ERROR: %s\n' "$message"
+  if command -v kdialog >/dev/null 2>&1; then
+    kdialog --title 'EOS Privet desktop error' --error "$message\n\nDetails: $log" &
+  fi
+  exit 1
+}
+
+[ -r "$layout" ] || fail "EOS desktop layout is missing: $layout"
+[ -r "$wallpaper" ] || fail "EOS wallpaper is missing: $wallpaper"
+command -v kwriteconfig6 >/dev/null 2>&1 || fail 'kwriteconfig6 is not installed.'
+command -v qdbus6 >/dev/null 2>&1 || fail 'qdbus6 is not installed.'
+command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || fail 'Plasma wallpaper support is not installed.'
+
+# Keep the selected identity explicit in the user's config so Debian's
+# desktop-base fallback can never replace it later in the same session.
+kwriteconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage "$theme_id" || \
+  fail 'Could not save the EOS Global Theme selection.'
+kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle Breeze || \
+  fail 'Could not save the EOS widget style.'
+kwriteconfig6 --file kdeglobals --group General --key BrowserApplication void-browser.desktop || \
+  fail 'Could not save Void as the default browser.'
+kwriteconfig6 --file kdeglobals --group General --key ColorScheme BreezeDark || \
+  fail 'Could not save the EOS color scheme.'
+kwriteconfig6 --file kdeglobals --group Icons --key Theme breeze-dark || \
+  fail 'Could not save the EOS icon theme.'
+kwriteconfig6 --file plasmarc --group Theme --key name breeze-dark || \
+  fail 'Could not save the EOS Plasma style.'
+
+desktop_matches_schema() {
+  [ -r "$plasma_config" ] &&
+    grep -Fq "file://$wallpaper" "$plasma_config" &&
+    grep -Fq 'org.kde.plasma.icontasks' "$plasma_config" &&
+    grep -Fq 'applications:void-browser.desktop' "$plasma_config" &&
+    grep -Fq 'org.kde.plasma.systemtray' "$plasma_config"
+}
+
+if [ -r "$marker" ] && [ "$(cat "$marker")" = "$schema_version" ] && desktop_matches_schema; then
+  printf '%s\n' 'EOS desktop schema is already current.'
+  exit 0
 fi
 
-# Some Debian live images create this only after the image-finalisation hook.
-# Never leave an internal-disk installer shortcut on the EOS Privet desktop.
-if [ -d "${HOME}/Desktop" ]; then
-  find "${HOME}/Desktop" -maxdepth 1 -type f \( \
-    -iname '*debian*install*.desktop' -o \
-    -iname '*install*debian*.desktop' -o \
-    -iname '*live*install*.desktop' \
-  \) -delete 2>/dev/null || true
+# XDG autostart phase 2 normally runs after plasmashell. A bounded readiness
+# check handles slower VM graphics without relying on one guessed sleep time.
+ready=false
+attempt=0
+while [ "$attempt" -lt 30 ]; do
+  if qdbus6 org.kde.plasmashell /PlasmaShell >/dev/null 2>&1; then
+    ready=true
+    break
+  fi
+  attempt=$((attempt + 1))
+  sleep 1
+done
+[ "$ready" = true ] || fail 'Plasma did not become ready within 30 seconds.'
+
+if ! desktop_matches_schema; then
+  printf '%s\n' 'Applying the EOS Plasma layout repair.'
+  layout_script=$(cat "$layout")
+  qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.evaluateScript "$layout_script" || \
+    fail 'Plasma rejected the EOS desktop layout.'
+  plasma-apply-wallpaperimage "$wallpaper" || \
+    fail 'Plasma could not apply the EOS wallpaper.'
 fi
+
+attempt=0
+while [ "$attempt" -lt 15 ]; do
+  desktop_matches_schema && break
+  attempt=$((attempt + 1))
+  sleep 1
+done
+desktop_matches_schema || fail 'EOS desktop verification failed after applying the layout.'
+
+printf '%s\n' "$schema_version" > "$marker" || \
+  fail 'Could not record the verified EOS desktop schema.'
+printf '%s\n' 'EOS desktop setup verified successfully.'

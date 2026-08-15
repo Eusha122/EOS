@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=EOS Privet Welcome
-Exec=eos-welcome --autostart
+Exec=/usr/local/bin/eos-welcome --autostart
+TryExec=/usr/local/bin/eos-welcome
 OnlyShowIn=KDE;
 X-KDE-autostart-phase=2
-X-KDE-autostart-after=panel
+X-GNOME-Autostart-enabled=true
 NoDisplay=true

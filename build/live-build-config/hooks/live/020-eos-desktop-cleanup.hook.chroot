@@ -1,16 +1,55 @@
 #!/bin/sh
 set -eu
 
-# Keep the fresh desktop from advertising itself as stock Debian/KDE.
-# EOS session setup also removes any installer shortcut generated after this
-# hook runs, because the live user home folder is created at boot.
+# These packages are pulled in as recommendations by Debian's KDE live task.
+# EOS has no internal-disk installer yet and supplies its own welcome screen.
+packages_to_purge=
+for package in plasma-welcome calamares-settings-debian debian-installer-launcher; do
+  if dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null | grep -qx installed; then
+    packages_to_purge="$packages_to_purge $package"
+  fi
+done
+
+if [ -n "$packages_to_purge" ]; then
+  DEBIAN_FRONTEND=noninteractive apt-get purge --yes $packages_to_purge
+fi
+
+# Remove any remaining launchers before the live user is created. All
+# privileged cleanup belongs here, never in the unprivileged live session.
+for dir in /etc/xdg/autostart /usr/share/autostart /usr/share/applications /etc/skel/Desktop; do
+  [ -d "$dir" ] || continue
+  find "$dir" -maxdepth 1 -type f \( \
+    -iname '*plasma*welcome*.desktop' -o \
+    -iname '*kde*welcome*.desktop' -o \
+    -iname '*debian*install*.desktop' -o \
+    -iname '*install*debian*.desktop' -o \
+    -iname '*live*install*.desktop' -o \
+    -iname '*calamares*.desktop' \
+  \) -delete 2>/dev/null || true
+done
+
 rm -f /etc/xdg/autostart/org.kde.plasma-welcome.desktop
+rm -f /usr/share/autostart/org.kde.plasma-welcome.desktop
+rm -f /usr/share/applications/org.kde.plasma-welcome.desktop
 rm -f /usr/share/applications/debian-installer.desktop
+rm -f /usr/share/applications/debian-installer-launcher.desktop
+rm -f /usr/share/applications/install-debian.desktop
 rm -f /usr/share/applications/live-installer.desktop
 rm -f /etc/skel/Desktop/debian-installer.desktop
+rm -f /etc/skel/Desktop/debian-installer-launcher.desktop
+rm -f /etc/skel/Desktop/install-debian.desktop
 rm -f /etc/skel/Desktop/live-installer.desktop
-find /etc/skel/Desktop -maxdepth 1 -type f \( \
-  -iname '*debian*install*.desktop' -o \
-  -iname '*install*debian*.desktop' -o \
-  -iname '*live*install*.desktop' \
-\) -delete 2>/dev/null || true
+rm -f /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc
+
+# Refresh the caches after deleting Debian launchers and installing EOS icons.
+# These are build-time operations; the live user never needs root access.
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database /usr/share/applications
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache --force --quiet /usr/share/icons/hicolor
+fi
+
+install -d -m 0755 /usr/lib/eos-privet
+printf '%s\n' 'permissions-and-desktop-cleanup=applied' \
+  > /usr/lib/eos-privet/build-hooks-applied

@@ -20,7 +20,7 @@ draw_menu() {
   |                    USB LIVE PRIVACY SESSION                   |
   +================================================================+
   |  STATUS    FRESH MODE READY                                    |
-  |  BUILD     0.1.0-dev                                           |
+  |  BUILD     @EOS_VERSION@                                       |
   +----------------------------------------------------------------+
   |                                                                |
   |  [1]  EXPLORE FRESH                                            |
@@ -40,6 +40,12 @@ while :; do
 
   case "$choice" in
     1)
+      if ! id @EOS_LIVE_USER@ >/dev/null 2>&1; then
+        printf '\n  [ERROR] The temporary EOS live user was not created.\n'
+        printf '          Fresh mode cannot start safely. Press Enter to return. '
+        IFS= read -r ignored || true
+        continue
+      fi
       printf '%s\n' fresh > "$runtime_dir/session-mode"
       printf '\n  [OK] Fresh session selected. Starting EOS Privet desktop...\n'
       printf '      Session data is temporary unless encrypted storage is unlocked.\n'

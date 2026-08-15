@@ -1,0 +1,16 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "EOS Privet Project"
+      }
+    ],
+    "Description": "EOS Privet dark live desktop",
+    "EnabledByDefault": true,
+    "Id": "org.eos.privet.desktop",
+    "License": "Proprietary",
+    "Name": "EOS Privet",
+    "Version": "@EOS_VERSION@"
+  }
+}
