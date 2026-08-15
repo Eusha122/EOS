@@ -68,8 +68,13 @@ dock.height = Math.round(gridUnit * 3.2);
 var tasks = addWidgetIfAvailable(dock, "org.kde.plasma.icontasks");
 if (tasks !== null) {
     tasks.currentConfigGroup = ["General"];
+    // Plasma's icon-tasks applet can read its defaults while a new panel is
+    // still being constructed. Writing twice before reloading avoids losing
+    // the launchers during that first asynchronous configuration pass.
+    tasks.writeConfig("launchers", dockLaunchers);
     tasks.writeConfig("launchers", dockLaunchers);
     tasks.writeConfig("showOnlyCurrentActivity", true);
     tasks.writeConfig("showOnlyCurrentDesktop", false);
+    tasks.reloadConfig();
 }
 addWidgetIfAvailable(dock, "org.kde.plasma.showdesktop");

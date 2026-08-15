@@ -1,21 +1,31 @@
 #!/bin/sh
 set -eu
+umask 077
 
-shown_marker="${XDG_RUNTIME_DIR:-/tmp}/eos-privet-welcome-shown"
+schema_version=phase2d-1
+runtime_home="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}"
+shown_marker="$runtime_home/eos-privet-welcome-shown"
 desktop_marker="${XDG_CONFIG_HOME:-$HOME/.config}/eos-privet/desktop-schema"
 
 if [ "${1:-}" = "--autostart" ]; then
   [ -e "$shown_marker" ] && exit 0
-  : > "$shown_marker"
 
   # Open only after the versioned desktop setup has succeeded. Do not race
-  # Plasma with an arbitrary fixed delay.
+  # Plasma with an arbitrary fixed delay or accept an older schema marker.
   attempt=0
-  while [ ! -r "$desktop_marker" ] && [ "$attempt" -lt 45 ]; do
+  recorded_schema=
+  while [ "$attempt" -lt 45 ]; do
+    if [ -r "$desktop_marker" ]; then
+      recorded_schema=$(cat "$desktop_marker" 2>/dev/null || true)
+      [ "$recorded_schema" = "$schema_version" ] && break
+    fi
     attempt=$((attempt + 1))
     sleep 1
   done
-  [ -r "$desktop_marker" ] || exit 0
+  [ "$recorded_schema" = "$schema_version" ] || exit 0
+
+  mkdir -p "$runtime_home"
+  : > "$shown_marker"
 fi
 
 message='<h2>Welcome to EOS Privet</h2>

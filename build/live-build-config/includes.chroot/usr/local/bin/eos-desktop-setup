@@ -1,5 +1,6 @@
 #!/bin/sh
 set -u
+umask 077
 
 # Plasma reads the EOS Global Theme before first login. This script is a
 # bounded, versioned repair path for incomplete first-session configuration;
@@ -8,7 +9,7 @@ set -u
 theme_id=org.eos.privet.desktop
 schema_version=phase2d-1
 wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png
-layout=/usr/share/plasma/look-and-feel/org.eos.privet.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+wallpaper_uri="file://$wallpaper"
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
 marker_dir="$config_home/eos-privet"
@@ -16,6 +17,8 @@ marker="$marker_dir/desktop-schema"
 log_dir="$state_home/eos-privet"
 log="$log_dir/desktop-setup.log"
 plasma_config="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
+layout_snapshot="$log_dir/live-layout.js"
+layout_backup="$log_dir/plasma-layout.before-$schema_version.conf"
 
 mkdir -p "$marker_dir" "$log_dir"
 exec >>"$log" 2>&1
@@ -32,11 +35,19 @@ fail() {
   exit 1
 }
 
-[ -r "$layout" ] || fail "EOS desktop layout is missing: $layout"
 [ -r "$wallpaper" ] || fail "EOS wallpaper is missing: $wallpaper"
 command -v kwriteconfig6 >/dev/null 2>&1 || fail 'kwriteconfig6 is not installed.'
 command -v qdbus6 >/dev/null 2>&1 || fail 'qdbus6 is not installed.'
 command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || fail 'Plasma wallpaper support is not installed.'
+
+# A current marker means the factory layout already passed live verification.
+# Exit before writing user configuration so future encrypted saved sessions can
+# customize their desktop without this first-login repair overwriting it.
+if [ "${1:-}" != "--repair" ] && [ -r "$marker" ] && \
+   [ "$(cat "$marker" 2>/dev/null || true)" = "$schema_version" ]; then
+  printf '%s\n' 'EOS desktop schema is already current; preserving user customization.'
+  exit 0
+fi
 
 # Keep the selected identity explicit in the user's config so Debian's
 # desktop-base fallback can never replace it later in the same session.
@@ -53,50 +64,91 @@ kwriteconfig6 --file kdeglobals --group Icons --key Theme breeze-dark || \
 kwriteconfig6 --file plasmarc --group Theme --key name breeze-dark || \
   fail 'Could not save the EOS Plasma style.'
 
-desktop_matches_schema() {
-  [ -r "$plasma_config" ] &&
-    grep -Fq "file://$wallpaper" "$plasma_config" &&
-    grep -Fq 'org.kde.plasma.icontasks' "$plasma_config" &&
-    grep -Fq 'applications:void-browser.desktop' "$plasma_config" &&
-    grep -Fq 'org.kde.plasma.systemtray' "$plasma_config"
+capture_live_layout() {
+  : > "$layout_snapshot"
+  qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.dumpCurrentLayoutJS > "$layout_snapshot"
 }
 
-if [ -r "$marker" ] && [ "$(cat "$marker")" = "$schema_version" ] && desktop_matches_schema; then
-  printf '%s\n' 'EOS desktop schema is already current.'
-  exit 0
-fi
+live_layout_has_eos_panels() {
+  [ -s "$layout_snapshot" ] &&
+    grep -Fq 'org.kde.plasma.icontasks' "$layout_snapshot" &&
+    grep -Fq 'applications:void-browser.desktop' "$layout_snapshot" &&
+    grep -Fq 'org.kde.plasma.systemtray' "$layout_snapshot" &&
+    grep -Fq '"location": "top"' "$layout_snapshot" &&
+    grep -Fq '"location": "bottom"' "$layout_snapshot"
+}
+
+live_layout_matches_schema() {
+  live_layout_has_eos_panels &&
+    grep -Fq "$wallpaper_uri" "$layout_snapshot"
+}
+
+plasma_screen_is_ready() {
+  ready_state=$(qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.isScreenUiReady 0 2>/dev/null || true)
+  [ "$ready_state" = true ]
+}
+
+wait_for_plasma_ready() {
+  attempt=0
+  while [ "$attempt" -lt 45 ]; do
+    if plasma_screen_is_ready && capture_live_layout && [ -s "$layout_snapshot" ]; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_eos_panels() {
+  attempt=0
+  while [ "$attempt" -lt 45 ]; do
+    capture_live_layout && live_layout_has_eos_panels && return 0
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_eos_schema() {
+  attempt=0
+  while [ "$attempt" -lt 30 ]; do
+    capture_live_layout && live_layout_matches_schema && return 0
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  return 1
+}
 
 # XDG autostart phase 2 normally runs after plasmashell. A bounded readiness
-# check handles slower VM graphics without relying on one guessed sleep time.
-ready=false
-attempt=0
-while [ "$attempt" -lt 30 ]; do
-  if qdbus6 org.kde.plasmashell /PlasmaShell >/dev/null 2>&1; then
-    ready=true
-    break
-  fi
-  attempt=$((attempt + 1))
-  sleep 1
-done
-[ "$ready" = true ] || fail 'Plasma did not become ready within 30 seconds.'
+# check handles slower VM graphics and real hardware without one guessed delay.
+wait_for_plasma_ready || fail 'Plasma did not become ready within 45 seconds.'
 
-if ! desktop_matches_schema; then
-  printf '%s\n' 'Applying the EOS Plasma layout repair.'
-  layout_script=$(cat "$layout")
+if ! live_layout_matches_schema; then
+  printf '%s\n' 'Applying the EOS Global Theme layout through Plasma.'
+  if [ -r "$plasma_config" ]; then
+    cp -p "$plasma_config" "$layout_backup" || \
+      fail 'Could not back up the previous Plasma layout before repair.'
+  fi
+
+  # This is Plasma's supported reset path for a Global Theme. It validates the
+  # package, clears the old containment config, and reloads the theme layout in
+  # Plasma's event loop instead of injecting JavaScript into a half-loaded UI.
   qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.evaluateScript "$layout_script" || \
-    fail 'Plasma rejected the EOS desktop layout.'
+    org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$theme_id" || \
+    fail 'Plasma rejected the EOS Global Theme layout.'
+
+  wait_for_eos_panels || \
+    fail 'Plasma did not load the EOS top bar and dock within 45 seconds.'
+
   plasma-apply-wallpaperimage "$wallpaper" || \
     fail 'Plasma could not apply the EOS wallpaper.'
 fi
 
-attempt=0
-while [ "$attempt" -lt 15 ]; do
-  desktop_matches_schema && break
-  attempt=$((attempt + 1))
-  sleep 1
-done
-desktop_matches_schema || fail 'EOS desktop verification failed after applying the layout.'
+wait_for_eos_schema || \
+  fail 'EOS live desktop verification failed after applying the Global Theme.'
 
 printf '%s\n' "$schema_version" > "$marker" || \
   fail 'Could not record the verified EOS desktop schema.'
