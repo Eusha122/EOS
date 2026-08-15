@@ -7,9 +7,9 @@ umask 077
 # it is not the primary theming mechanism and it never overwrites a later
 # persisted user's layout after this schema has been applied successfully.
 theme_id=org.eos.privet.desktop
-schema_version=phase2d-1
+fallback_theme_id=org.kde.breeze.desktop
+schema_version=phase2d-2
 wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png
-wallpaper_uri="file://$wallpaper"
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
 marker_dir="$config_home/eos-privet"
@@ -20,6 +20,10 @@ plasma_config="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
 layout_snapshot="$log_dir/live-layout.js"
 layout_previous="$log_dir/live-layout.previous.js"
 layout_backup="$log_dir/plasma-layout.before-$schema_version.conf"
+config_previous="$log_dir/plasma-layout.persisted.previous.conf"
+layout_verifier=/usr/local/lib/eos-privet/verify-plasma-layout
+rollback_needed=0
+had_previous_config=0
 
 mkdir -p "$marker_dir" "$log_dir"
 exec >>"$log" 2>&1
@@ -27,8 +31,34 @@ exec >>"$log" 2>&1
 printf '%s\n' 'EOS desktop setup started'
 date -u '+%Y-%m-%dT%H:%M:%SZ'
 
+restore_previous_layout() {
+  [ "$rollback_needed" -eq 1 ] || return 0
+  rollback_needed=0
+  printf '%s\n' 'Restoring the desktop layout that existed before the failed EOS reset.'
+
+  if [ "$had_previous_config" -eq 1 ] && [ -r "$layout_backup" ]; then
+    rollback_tmp="$plasma_config.eos-rollback.$$"
+    rm -f "$rollback_tmp"
+    if cp -p "$layout_backup" "$rollback_tmp" && mv -f "$rollback_tmp" "$plasma_config"; then
+      sync "$plasma_config" 2>/dev/null || true
+      if command -v systemctl >/dev/null 2>&1; then
+        timeout 15 systemctl --user restart plasma-plasmashell.service || true
+      fi
+      return 0
+    fi
+    rm -f "$rollback_tmp"
+  fi
+
+  # A first login may not have had a config file to restore. In that unusual
+  # case, request Plasma's installed Breeze layout so the user still has a
+  # usable panel instead of a half-created desktop.
+  timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$fallback_theme_id" || true
+}
+
 fail() {
   message=$1
+  restore_previous_layout
   printf 'ERROR: %s\n' "$message"
   if command -v kdialog >/dev/null 2>&1; then
     kdialog --title 'EOS Privet desktop error' --error "$message\n\nDetails: $log" &
@@ -39,7 +69,9 @@ fail() {
 [ -r "$wallpaper" ] || fail "EOS wallpaper is missing: $wallpaper"
 command -v kwriteconfig6 >/dev/null 2>&1 || fail 'kwriteconfig6 is not installed.'
 command -v qdbus6 >/dev/null 2>&1 || fail 'qdbus6 is not installed.'
+command -v timeout >/dev/null 2>&1 || fail 'The timeout command is not installed.'
 command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || fail 'Plasma wallpaper support is not installed.'
+[ -x "$layout_verifier" ] || fail 'The EOS Plasma layout verifier is missing.'
 
 # A current marker means the factory layout already passed live verification.
 # Exit before writing user configuration so future encrypted saved sessions can
@@ -66,23 +98,21 @@ kwriteconfig6 --file plasmarc --group Theme --key name breeze-dark || \
   fail 'Could not save the EOS Plasma style.'
 
 capture_live_layout() {
-  : > "$layout_snapshot"
-  qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.dumpCurrentLayoutJS > "$layout_snapshot"
-}
-
-live_layout_has_eos_panels() {
-  [ -s "$layout_snapshot" ] &&
-    grep -Fq 'org.kde.plasma.icontasks' "$layout_snapshot" &&
-    grep -Fq 'applications:void-browser.desktop' "$layout_snapshot" &&
-    grep -Fq 'org.kde.plasma.systemtray' "$layout_snapshot" &&
-    grep -Fq '"location": "top"' "$layout_snapshot" &&
-    grep -Fq '"location": "bottom"' "$layout_snapshot"
+  snapshot_tmp="$layout_snapshot.tmp.$$"
+  rm -f "$snapshot_tmp"
+  if timeout 3 qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.dumpCurrentLayoutJS > "$snapshot_tmp" && \
+    [ -s "$snapshot_tmp" ]; then
+    mv -f "$snapshot_tmp" "$layout_snapshot"
+    return 0
+  fi
+  rm -f "$snapshot_tmp"
+  return 1
 }
 
 live_layout_matches_schema() {
-  live_layout_has_eos_panels &&
-    grep -Fq "$wallpaper_uri" "$layout_snapshot"
+  [ -s "$layout_snapshot" ] &&
+    "$layout_verifier" --live "$layout_snapshot" >/dev/null 2>&1
 }
 
 live_layout_is_loaded() {
@@ -95,9 +125,9 @@ live_layout_is_loaded() {
 
 wait_for_plasma_ready() {
   rm -f "$layout_previous"
-  attempt=0
   stable_snapshots=0
-  while [ "$attempt" -lt 45 ]; do
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
     if capture_live_layout && live_layout_is_loaded; then
       if [ -s "$layout_previous" ] && cmp -s "$layout_snapshot" "$layout_previous"; then
         stable_snapshots=$((stable_snapshots + 1))
@@ -107,27 +137,33 @@ wait_for_plasma_ready() {
         cp "$layout_snapshot" "$layout_previous" || return 1
       fi
     fi
-    attempt=$((attempt + 1))
-    sleep 1
-  done
-  return 1
-}
-
-wait_for_eos_panels() {
-  attempt=0
-  while [ "$attempt" -lt 45 ]; do
-    capture_live_layout && live_layout_has_eos_panels && return 0
-    attempt=$((attempt + 1))
     sleep 1
   done
   return 1
 }
 
 wait_for_eos_schema() {
-  attempt=0
-  while [ "$attempt" -lt 30 ]; do
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
     capture_live_layout && live_layout_matches_schema && return 0
-    attempt=$((attempt + 1))
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_persisted_schema() {
+  rm -f "$config_previous"
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if [ -s "$plasma_config" ] && \
+       "$layout_verifier" --config "$plasma_config" >/dev/null 2>&1; then
+      if [ -s "$config_previous" ] && cmp -s "$plasma_config" "$config_previous"; then
+        return 0
+      fi
+      cp "$plasma_config" "$config_previous" || return 1
+    else
+      rm -f "$config_previous"
+    fi
     sleep 1
   done
   return 1
@@ -135,32 +171,44 @@ wait_for_eos_schema() {
 
 # XDG autostart phase 2 normally runs after plasmashell. A bounded readiness
 # check handles slower VM graphics and real hardware without one guessed delay.
-wait_for_plasma_ready || fail 'Plasma did not become ready within 45 seconds.'
+wait_for_plasma_ready || fail 'Plasma did not become ready within the 60-second safety limit.'
 
 if ! live_layout_matches_schema; then
   printf '%s\n' 'Applying the EOS Global Theme layout through Plasma.'
   if [ -r "$plasma_config" ]; then
     cp -p "$plasma_config" "$layout_backup" || \
       fail 'Could not back up the previous Plasma layout before repair.'
+    had_previous_config=1
   fi
+  rollback_needed=1
 
   # This is Plasma's supported reset path for a Global Theme. It validates the
   # package, clears the old containment config, and reloads the theme layout in
   # Plasma's event loop instead of injecting JavaScript into a half-loaded UI.
-  qdbus6 org.kde.plasmashell /PlasmaShell \
+  timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
     org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$theme_id" || \
     fail 'Plasma rejected the EOS Global Theme layout.'
-
-  wait_for_eos_panels || \
-    fail 'Plasma did not load the EOS top bar and dock within 45 seconds.'
 
   plasma-apply-wallpaperimage "$wallpaper" || \
     fail 'Plasma could not apply the EOS wallpaper.'
 fi
 
 wait_for_eos_schema || \
-  fail 'EOS live desktop verification failed after applying the Global Theme.'
+  fail 'EOS did not reach its exact top-bar, dock, launcher, and wallpaper schema.'
 
-printf '%s\n' "$schema_version" > "$marker" || \
+# Plasma writes containment configuration asynchronously. Require two
+# identical, fully validated on-disk snapshots before recording success, so a
+# sudden shutdown cannot leave a success marker beside a partial layout.
+wait_for_persisted_schema || \
+  fail 'Plasma did not safely persist the verified EOS desktop layout.'
+sync "$plasma_config" || fail 'Could not flush the EOS Plasma configuration to storage.'
+
+marker_tmp="$marker.tmp.$$"
+rm -f "$marker_tmp"
+printf '%s\n' "$schema_version" > "$marker_tmp" || \
+  fail 'Could not stage the verified EOS desktop schema marker.'
+mv -f "$marker_tmp" "$marker" || \
   fail 'Could not record the verified EOS desktop schema.'
+sync "$marker" || fail 'Could not flush the EOS desktop schema marker.'
+rollback_needed=0
 printf '%s\n' 'EOS desktop setup verified successfully.'

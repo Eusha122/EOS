@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-schema_version=phase2d-1
+schema_version=phase2d-2
 runtime_home="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}"
 shown_marker="$runtime_home/eos-privet-welcome-shown"
 desktop_marker="${XDG_CONFIG_HOME:-$HOME/.config}/eos-privet/desktop-schema"

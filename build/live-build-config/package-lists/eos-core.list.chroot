@@ -20,6 +20,7 @@ qdbus-qt6
 kpackagetool6
 desktop-file-utils
 systemsettings
+kinfocenter
 powerdevil
 kscreen
 xdg-desktop-portal
@@ -52,6 +53,7 @@ dolphin
 ark
 filelight
 kdialog
+python3-minimal
 fonts-inter
 fonts-hack
 fonts-noto-core

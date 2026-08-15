@@ -3,6 +3,7 @@ set -eu
 
 for path in \
   /usr/local/lib/eos-privet/boot-gate \
+  /usr/local/lib/eos-privet/verify-plasma-layout \
   /usr/local/bin/eos-desktop-setup \
   /usr/local/bin/eos-desktop-app \
   /usr/local/bin/eos-welcome \

@@ -17,8 +17,9 @@ components:
 profiles:
   enabled:
     - core
+    - firmware
   reserved:
-    - web-security
-    - network-security
-    - forensics-security
-    - wireless-security
+    - security-web
+    - security-network
+    - security-forensics
+    - security-wireless
