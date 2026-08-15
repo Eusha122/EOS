@@ -71,6 +71,7 @@ live_hostname="$(manifest_scalar live hostname)" || \
   die 'release manifest must define exactly one live.hostname'
 theme_id=org.eos.privet.desktop
 wallpaper_name=1672x941.png
+icon_theme=Papirus-Dark
 iso_name="EOS-Privet-${version}-${architecture}.iso"
 package_manifest_name="EOS-Privet-${version}-${architecture}.packages.tsv"
 build_info_name="EOS-Privet-${version}-${architecture}.build-info.txt"
@@ -529,6 +530,7 @@ required_live_files=(
   usr/share/icons/hicolor/scalable/apps/void-browser.svg
   usr/share/icons/hicolor/scalable/apps/eos-privet.svg
   usr/share/icons/breeze-dark/index.theme
+  "usr/share/icons/$icon_theme/index.theme"
   usr/share/color-schemes/BreezeDark.colors
   usr/share/plasma/desktoptheme/breeze-dark/metadata.json
   usr/share/applications/void-browser.desktop
@@ -847,6 +849,7 @@ required_packages=(
   kactivitymanagerd
   kpackagetool6
   libkf6config-bin
+  papirus-icon-theme
   plasma-desktop
   plasma-desktoptheme
   plasma-pa
@@ -900,6 +903,15 @@ grep -Fxq "LookAndFeelPackage=$theme_id" "$chroot_root/etc/xdg/kdeglobals" || \
   die 'system KDE defaults do not select the EOS Global Theme'
 grep -Fxq "LookAndFeelPackage=$theme_id" "$chroot_root/etc/skel/.config/kdeglobals" || \
   die 'new-user KDE defaults do not select the EOS Global Theme'
+grep -Fxq "Theme=$icon_theme" "$chroot_root/etc/xdg/kdeglobals" || \
+  die 'system KDE defaults do not select the EOS icon theme'
+grep -Fxq "Theme=$icon_theme" "$chroot_root/etc/skel/.config/kdeglobals" || \
+  die 'new-user KDE defaults do not select the EOS icon theme'
+grep -Fxq "Theme=$icon_theme" \
+  "$chroot_root/usr/share/plasma/look-and-feel/$theme_id/contents/defaults" || \
+  die 'the EOS Global Theme does not default to the EOS icon theme'
+grep -Fq "Theme $icon_theme" "$chroot_root/usr/local/bin/eos-desktop-setup" || \
+  die 'the first-session setup does not apply the EOS icon theme'
 grep -Fq "\"Version\": \"$version\"" \
   "$chroot_root/usr/share/plasma/look-and-feel/$theme_id/metadata.json" || \
   die 'EOS Global Theme version does not match the release manifest'
@@ -1105,6 +1117,10 @@ awk '
 
 grep -Fxq "LookAndFeelPackage=$theme_id" "$final_root/etc/xdg/kdeglobals" || \
   die 'final ISO does not select the EOS Global Theme system-wide'
+grep -Fxq "Theme=$icon_theme" "$final_root/etc/xdg/kdeglobals" || \
+  die 'final ISO does not select the EOS icon theme system-wide'
+grep -Fxq "Theme=$icon_theme" "$final_root/etc/skel/.config/kdeglobals" || \
+  die 'final ISO new-user defaults do not select the EOS icon theme'
 grep -Fxq 'ID=eos-privet' "$final_root/usr/lib/os-release" || \
   die 'final ISO system identity is not EOS Privet'
 cmp -s "$final_root/usr/lib/os-release" "$final_root/etc/os-release" || \

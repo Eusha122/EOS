@@ -216,7 +216,7 @@ visual_preferences_match() {
     [ "$(kreadconfig6 --file "$kde_config" --group KDE --key widgetStyle)" = Breeze ] &&
     [ "$(kreadconfig6 --file "$kde_config" --group General --key BrowserApplication)" = void-browser.desktop ] &&
     [ "$(kreadconfig6 --file "$kde_config" --group General --key ColorScheme)" = BreezeDark ] &&
-    [ "$(kreadconfig6 --file "$kde_config" --group Icons --key Theme)" = breeze-dark ] &&
+    [ "$(kreadconfig6 --file "$kde_config" --group Icons --key Theme)" = Papirus-Dark ] &&
     [ "$(kreadconfig6 --file "$plasma_style_config" --group Theme --key name)" = breeze-dark ]
 }
 
@@ -403,7 +403,7 @@ kwriteconfig6 --file "$kde_config" --group General --key BrowserApplication \
   void-browser.desktop || fail 'Could not save Void as the default browser.'
 kwriteconfig6 --file "$kde_config" --group General --key ColorScheme BreezeDark ||
   fail 'Could not save the EOS color scheme.'
-kwriteconfig6 --file "$kde_config" --group Icons --key Theme breeze-dark ||
+kwriteconfig6 --file "$kde_config" --group Icons --key Theme Papirus-Dark ||
   fail 'Could not save the EOS icon theme.'
 kwriteconfig6 --file "$plasma_style_config" --group Theme --key name breeze-dark ||
   fail 'Could not save the EOS Plasma style.'
