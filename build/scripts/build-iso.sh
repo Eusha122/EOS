@@ -11,7 +11,7 @@ die() {
   exit 1
 }
 
-project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 config_root="$project_root/build/live-build-config"
 manifest="$project_root/build/manifests/eos-release.yaml"
 wallpaper_root="$project_root/assets/wallpapers"
@@ -34,7 +34,7 @@ build_info_tmp="$work_root/$build_info_name"
 [ "$(id -u)" -eq 0 ] || \
   die 'run this build as root (for example: sudo bash build/scripts/build-iso.sh)'
 
-for command_name in awk chroot cmp cp find grep install lb mv python3 rm sed sh sha256sum sort stat; do
+for command_name in awk chown chroot cmp cp find findmnt grep install lb mv python3 rm sed sh sha256sum sort stat unsquashfs xorriso; do
   command -v "$command_name" >/dev/null 2>&1 || \
     die "required build command is missing: $command_name"
 done
@@ -60,6 +60,38 @@ case "$work_root" in
   "$project_root"/build/.work/live-build) ;;
   *) die 'refusing to clean an unexpected build work directory' ;;
 esac
+case "$output_root" in
+  "$project_root"/out) ;;
+  *) die 'refusing to publish into an unexpected output directory' ;;
+esac
+
+mounts_below_work_root() {
+  findmnt --raw --noheadings --output TARGET | \
+    awk -v root="$work_root" '$0 == root || index($0, root "/") == 1'
+}
+
+report_interrupted_build() {
+  exit_status=$?
+  trap - EXIT
+  if [ "$exit_status" -ne 0 ]; then
+    remaining_mounts="$(mounts_below_work_root || true)"
+    if [ -n "$remaining_mounts" ]; then
+      printf '%s\n' 'EOS build stopped with live-build mounts still active:' >&2
+      printf '%s\n' "$remaining_mounts" >&2
+      printf 'Before the next build, run: sudo umount -R %q\n' \
+        "$work_root/chroot" >&2
+    fi
+  fi
+  exit "$exit_status"
+}
+trap report_interrupted_build EXIT
+
+mkdir -p "$output_root"
+rm -f \
+  "$output_root/$iso_name" \
+  "$output_root/$iso_name.sha256" \
+  "$output_root/$package_manifest_name" \
+  "$output_root/$build_info_name"
 
 for source_file in \
   "$branding_root/eos-logo.svg" \
@@ -98,21 +130,39 @@ if (width, height) != (1672, 941):
     raise SystemExit(1)
 PY
 
-# Catch syntax errors in project shell entry points before downloading or
-# unpacking packages. The files are POSIX sh unless this build script says bash.
+# Catch syntax errors in known project shell entry points before downloading or
+# unpacking packages. Future data files under /usr/local are not assumed to be
+# executable shell code.
 while IFS= read -r -d '' shell_file; do
   sh -n "$shell_file" || die "shell syntax check failed: $shell_file"
 done < <(
-  find "$config_root" -type f \( \
-    -name '*.hook.chroot' -o \
-    -path '*/usr/local/bin/*' -o \
-    -path '*/usr/local/lib/eos-privet/*' \
-  \) -print0
+  find "$config_root/hooks" -type f -name '*.hook.chroot' -print0
 )
 
+for shell_file in \
+  "$config_root/includes.chroot/usr/local/lib/eos-privet/boot-gate" \
+  "$config_root/includes.chroot/usr/local/bin/e-browser" \
+  "$config_root/includes.chroot/usr/local/bin/eos-desktop-app" \
+  "$config_root/includes.chroot/usr/local/bin/eos-desktop-setup" \
+  "$config_root/includes.chroot/usr/local/bin/eos-wallpapers" \
+  "$config_root/includes.chroot/usr/local/bin/eos-welcome" \
+  "$config_root/includes.chroot/usr/local/bin/void-browser"
+do
+  sh -n "$shell_file" || die "shell syntax check failed: $shell_file"
+done
+
+active_mounts="$(mounts_below_work_root)"
+[ -z "$active_mounts" ] || {
+  printf '%s\n' 'Refusing to delete a live-build work tree that still contains mounts:' >&2
+  printf '%s\n' "$active_mounts" >&2
+  die "unmount the stale chroot first: sudo umount -R $work_root/chroot"
+}
 rm -rf "$work_root"
-mkdir -p "$work_root/config" "$output_root"
+mkdir -p "$work_root/config"
 cp -a "$config_root/." "$work_root/config/"
+chown -R 0:0 "$work_root/config"
+find "$work_root/config" -type d -exec chmod 0755 {} +
+find "$work_root/config" -type f -exec chmod 0644 {} +
 
 find "$work_root/config/hooks" -type f -name '*.hook.chroot' -exec chmod 0755 {} +
 for path in \
@@ -178,6 +228,19 @@ lb config \
 
 lb build
 
+active_mounts="$(mounts_below_work_root)"
+[ -z "$active_mounts" ] || {
+  printf '%s\n' 'live-build returned while mounts were still active:' >&2
+  printf '%s\n' "$active_mounts" >&2
+  die 'refusing to validate or publish an ISO from a mounted work tree'
+}
+
+shopt -s nullglob
+artifacts=( "$work_root"/*.iso )
+[ "${#artifacts[@]}" -eq 1 ] || \
+  die "expected exactly one ISO artifact from live-build; found ${#artifacts[@]}"
+iso_artifact="${artifacts[0]}"
+
 chroot_root="$work_root/chroot"
 required_live_files=(
   usr/lib/eos-privet/build-hooks-applied
@@ -187,10 +250,15 @@ required_live_files=(
   usr/lib/systemd/system/live-config.service
   usr/lib/user-setup/user-setup-apply
   usr/local/lib/eos-privet/boot-gate
+  usr/local/bin/e-browser
+  usr/local/bin/eos-desktop-app
   usr/local/bin/eos-desktop-setup
+  usr/local/bin/eos-wallpapers
   usr/local/bin/eos-welcome
   usr/local/bin/void-browser
   etc/sddm.conf.d/eos-live.conf
+  etc/systemd/system/eos-boot-gate.service
+  etc/systemd/system/display-manager.service.d/eos-boot-gate.conf
   etc/xdg/kdeglobals
   etc/xdg/kicker-extra-favoritesrc
   etc/xdg/autostart/eos-desktop-setup.desktop
@@ -214,6 +282,9 @@ required_live_files=(
   usr/share/color-schemes/BreezeDark.colors
   usr/share/plasma/desktoptheme/breeze-dark/metadata.json
   usr/share/applications/void-browser.desktop
+  usr/share/applications/e-browser.desktop
+  usr/share/applications/eos-desktop-app.desktop
+  usr/share/applications/eos-wallpapers.desktop
   usr/share/applications/eos-welcome.desktop
   usr/share/applications/org.kde.dolphin.desktop
   usr/share/applications/org.kde.konsole.desktop
@@ -227,10 +298,29 @@ required_live_files=(
   usr/bin/dolphin
   usr/bin/konsole
 )
-for relative_path in "${required_live_files[@]}"; do
-  [ -e "$chroot_root/$relative_path" ] || \
-    die "built live filesystem is missing: /$relative_path"
-done
+
+verify_required_tree() {
+  tree_root=$1
+  tree_label=$2
+
+  for relative_path in "${required_live_files[@]}"; do
+    full_path="$tree_root/$relative_path"
+    [ -e "$full_path" ] || [ -L "$full_path" ] || \
+      die "$tree_label is missing: /$relative_path"
+
+    owner="$(stat -c '%u:%g' -- "$full_path")"
+    [ "$owner" = 0:0 ] || \
+      die "$tree_label has non-root ownership on /$relative_path ($owner)"
+
+    if [ ! -L "$full_path" ]; then
+      mode="$(stat -c '%a' -- "$full_path")"
+      (( (8#$mode & 8#022) == 0 )) || \
+        die "$tree_label has a group/world-writable trusted path: /$relative_path ($mode)"
+    fi
+  done
+}
+
+verify_required_tree "$chroot_root" 'built live filesystem'
 
 for executable_path in \
   usr/local/lib/eos-privet/boot-gate \
