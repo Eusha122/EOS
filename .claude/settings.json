@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sh -n build/live-build-config/includes.chroot/usr/local/bin/eos-desktop-setup)",
+      "Bash(bash -c 'icon_theme=Papirus-Dark; arr=\\( usr/share/icons/breeze-dark/index.theme \"usr/share/icons/$icon_theme/index.theme\" \\); printf \"  [%s]\\\\n\" \"${arr[@]}\"')",
+      "Bash(grep -c 'for package_name in \"${required_packages\\\\[@\\\\]}\"' build/scripts/build-iso.sh)"
+    ]
+  }
+}
