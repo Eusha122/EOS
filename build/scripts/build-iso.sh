@@ -41,10 +41,17 @@ publish_build_info_tmp="$output_root/.$build_info_name.new.$$"
 [ "$(id -u)" -eq 0 ] || \
   die 'run this build as root (for example: sudo bash build/scripts/build-iso.sh)'
 
-for command_name in awk chmod chown chroot cmp cp find findmnt grep install lb mkdir mv python3 readlink rm sed sh sha256sum sort stat unsquashfs xorriso; do
+for command_name in awk bash chmod chown chroot cmp cp find flock grep install lb mkdir mv node python3 readlink rm sed sh sha256sum sort stat unsquashfs xorriso; do
   command -v "$command_name" >/dev/null 2>&1 || \
     die "required build command is missing: $command_name"
 done
+
+[ -f "$manifest" ] && [ ! -L "$manifest" ] || \
+  die 'the release manifest must be a regular file, not a symlink'
+case "$(readlink -f -- "$manifest")" in
+  "$project_root"/*) ;;
+  *) die 'the release manifest resolves outside the project root' ;;
+esac
 
 fs_type="$(stat -f -c %T "$project_root" 2>/dev/null || true)"
 case "$fs_type" in
@@ -86,6 +93,14 @@ esac
   die 'the physical build directory escaped the project root'
 [ "$(readlink -f -- "$config_root")" = "$config_root" ] || \
   die 'the physical live-build configuration escaped the project root'
+
+build_lock="$project_root/build/.eos-build.lock"
+if [ -e "$build_lock" ] || [ -L "$build_lock" ]; then
+  [ -f "$build_lock" ] && [ ! -L "$build_lock" ] || \
+    die 'the build lock must be a regular file, not a symlink'
+fi
+exec 9>"$build_lock"
+flock -n 9 || die 'another EOS ISO build is already running for this project'
 
 mkdir -p "$project_root/build/.work"
 [ -d "$project_root/build/.work" ] && [ ! -L "$project_root/build/.work" ] || \
@@ -144,8 +159,32 @@ for profile_name in "${reserved_profiles[@]}"; do
 done
 
 mounts_below_work_root() {
-  findmnt --raw --noheadings --output TARGET | \
-    awk -v root="$work_root" '$0 == root || index($0, root "/") == 1'
+  python3 - "$work_root" <<'PY'
+import os
+import re
+import sys
+
+
+root = os.path.normpath(sys.argv[1])
+
+
+def decode_mount_field(value: str) -> str:
+    return re.sub(
+        r"\\(040|011|012|134)",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+
+with open("/proc/self/mountinfo", encoding="utf-8") as mountinfo:
+    for line in mountinfo:
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+        target = os.path.normpath(decode_mount_field(fields[4]))
+        if target == root or target.startswith(root + os.sep):
+            print(target)
+PY
 }
 
 report_interrupted_build() {
@@ -183,8 +222,20 @@ for source_file in \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js" \
   "$config_root/includes.chroot/usr/share/wallpapers/EOSPrivet/metadata.json"
 do
-  [ -s "$source_file" ] || die "required source asset is missing or empty: $source_file"
+  [ -f "$source_file" ] && [ ! -L "$source_file" ] && [ -s "$source_file" ] || \
+    die "required source asset is missing, empty, or a symlink: $source_file"
+  case "$(readlink -f -- "$source_file")" in
+    "$project_root"/*) ;;
+    *) die "required source asset resolves outside the project root: $source_file" ;;
+  esac
 done
+
+unexpected_source_symlink="$(find "$config_root" -type l -print -quit)"
+[ -z "$unexpected_source_symlink" ] || \
+  die "live-build source configuration contains an unsupported symlink: $unexpected_source_symlink"
+unexpected_python_cache="$(find "$config_root" \( -type d -name __pycache__ -o -type f -name '*.py[cod]' \) -print -quit)"
+[ -z "$unexpected_python_cache" ] || \
+  die "live-build source contains generated Python bytecode: $unexpected_python_cache"
 
 for metadata_file in \
   "$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/metadata.json" \
@@ -194,26 +245,41 @@ do
     die "invalid JSON metadata: $metadata_file"
 done
 
-python3 - "$wallpaper_root/cicada-default.png" <<'PY' || \
-  die 'the default wallpaper is not a valid 1672x941 PNG'
+python3 - \
+  "$wallpaper_root/cicada-default.png" \
+  "$wallpaper_root/cicada-01.png" \
+  "$wallpaper_root/cicada-02.png" \
+  "$wallpaper_root/cicada-03.png" <<'PY' || \
+  die 'an EOS wallpaper is not a valid 1672x941 PNG'
 import struct
 import sys
 
-path = sys.argv[1]
-with open(path, "rb") as stream:
-    header = stream.read(24)
-if len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
-    raise SystemExit(1)
-width, height = struct.unpack(">II", header[16:24])
-if (width, height) != (1672, 941):
-    raise SystemExit(1)
+for path in sys.argv[1:]:
+    with open(path, "rb") as stream:
+        header = stream.read(24)
+    if len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+        raise SystemExit(1)
+    width, height = struct.unpack(">II", header[16:24])
+    if (width, height) != (1672, 941):
+        raise SystemExit(1)
 PY
 
-# Catch syntax errors in known project shell entry points before downloading or
-# unpacking packages. Future data files under /usr/local are not assumed to be
-# executable shell code.
+# Catch syntax errors in known project entry points before downloading or
+# unpacking packages. Parse each script with the interpreter declared by its
+# shebang instead of accepting Bash syntax through a POSIX-shell check.
+check_shell_syntax() {
+  local shell_file=$1
+  local shebang
+  IFS= read -r shebang < "$shell_file" || true
+  case "$shebang" in
+    *bash*) bash -n -- "$shell_file" ;;
+    '#!'*) sh -n -- "$shell_file" ;;
+    *) die "executable script has no supported shebang: $shell_file" ;;
+  esac
+}
+
 while IFS= read -r -d '' shell_file; do
-  sh -n "$shell_file" || die "shell syntax check failed: $shell_file"
+  check_shell_syntax "$shell_file" || die "shell syntax check failed: $shell_file"
 done < <(
   find "$config_root/hooks" -type f -name '*.hook.chroot' -print0
 )
@@ -227,8 +293,12 @@ for shell_file in \
   "$config_root/includes.chroot/usr/local/bin/eos-welcome" \
   "$config_root/includes.chroot/usr/local/bin/void-browser"
 do
-  sh -n "$shell_file" || die "shell syntax check failed: $shell_file"
+  check_shell_syntax "$shell_file" || die "shell syntax check failed: $shell_file"
 done
+
+layout_source="$config_root/includes.chroot/usr/share/plasma/look-and-feel/$theme_id/contents/layouts/org.kde.plasma.desktop-layout.js"
+node --check "$layout_source" >/dev/null || \
+  die 'EOS Plasma layout JavaScript has invalid syntax'
 
 python3 - "$config_root/includes.chroot/usr/local/lib/eos-privet/verify-plasma-layout" <<'PY' || \
   die 'EOS Plasma layout verifier has invalid Python syntax'
@@ -238,8 +308,11 @@ import sys
 path = Path(sys.argv[1])
 compile(path.read_text(encoding="utf-8"), str(path), "exec")
 PY
-python3 "$project_root/build/tests/test_verify_plasma_layout.py" || \
+PYTHONDONTWRITEBYTECODE=1 python3 "$project_root/build/tests/test_verify_plasma_layout.py" || \
   die 'EOS Plasma layout verifier regression tests failed'
+unexpected_python_cache="$(find "$config_root" \( -type d -name __pycache__ -o -type f -name '*.py[cod]' \) -print -quit)"
+[ -z "$unexpected_python_cache" ] || \
+  die "source validation generated Python bytecode inside the live image tree: $unexpected_python_cache"
 
 active_mounts="$(mounts_below_work_root)"
 [ -z "$active_mounts" ] || {
@@ -262,7 +335,8 @@ find "$work_root/config/hooks" -type f -name '*.hook.chroot' -exec chmod 0755 {}
 package_list_root="$work_root/config/package-lists"
 for profile_name in "${!profile_state[@]}"; do
   profile_file="$package_list_root/eos-$profile_name.list.chroot"
-  [ -f "$profile_file" ] || die "manifest profile has no package list: $profile_name"
+  [ -f "$profile_file" ] && [ ! -L "$profile_file" ] || \
+    die "manifest profile has no regular package list: $profile_name"
   if [ "${profile_state[$profile_name]}" = reserved ]; then
     if awk 'NF && $1 !~ /^#/ { found=1 } END { exit found ? 0 : 1 }' "$profile_file"; then
       die "reserved package profile contains active packages: $profile_name"
@@ -271,11 +345,15 @@ for profile_name in "${!profile_state[@]}"; do
   fi
 done
 while IFS= read -r -d '' profile_file; do
-  profile_name="${profile_file##*/eos-}"
-  profile_name="${profile_name%.list.chroot}"
-  [ -n "${profile_state[$profile_name]+set}" ] || \
-    die "package list is not declared enabled or reserved in the manifest: $profile_name"
-done < <(find "$package_list_root" -maxdepth 1 -type f -name 'eos-*.list.chroot' -print0)
+  [ -f "$profile_file" ] && [ ! -L "$profile_file" ] || \
+    die "package-list directory contains an unsupported entry: ${profile_file##*/}"
+  profile_basename="${profile_file##*/}"
+  [[ "$profile_basename" =~ ^eos-([a-z0-9][a-z0-9-]*)\.list\.chroot$ ]] || \
+    die "package list bypasses the EOS manifest naming policy: $profile_basename"
+  profile_name="${BASH_REMATCH[1]}"
+  [ "${profile_state[$profile_name]:-}" = enabled ] || \
+    die "active package list is not an enabled manifest profile: $profile_basename"
+done < <(find "$package_list_root" -mindepth 1 -maxdepth 1 -print0)
 
 for path in \
   "$work_root/config/includes.chroot/usr/local/lib/eos-privet/boot-gate" \
@@ -342,6 +420,7 @@ lb config \
   --bootappend-live-failsafe "boot=live components username=$live_username hostname=$live_hostname memtest noapic noapm nodma nomce nolapic nomodeset nosmp nosplash vga=normal" \
   --iso-application 'EOS Privet' \
   --iso-publisher 'EOS Privet Project' \
+  --iso-volume 'EOS_PRIVET' \
   --apt-indices false
 
 lb build
@@ -381,6 +460,8 @@ required_live_files=(
   etc/sddm.conf.d/eos-live.conf
   etc/systemd/system/eos-boot-gate.service
   etc/systemd/system/display-manager.service.d/eos-boot-gate.conf
+  usr/lib/systemd/user/plasma-plasmashell.service
+  usr/share/dbus-1/services/org.kde.ActivityManager.service
   etc/xdg/kdeglobals
   etc/xdg/kicker-extra-favoritesrc
   etc/xdg/autostart/eos-desktop-setup.desktop
@@ -414,11 +495,21 @@ required_live_files=(
   usr/share/applications/org.kde.dolphin.desktop
   usr/share/applications/org.kde.konsole.desktop
   usr/share/wayland-sessions/plasma.desktop
+  usr/bin/bash
+  usr/bin/cmp
+  usr/bin/env
   usr/bin/qdbus6
+  usr/bin/flock
+  usr/bin/grep
+  usr/bin/kdialog
+  usr/bin/kreadconfig6
   usr/bin/kwriteconfig6
   usr/bin/kpackagetool6
+  usr/bin/mktemp
   usr/bin/desktop-file-validate
-  usr/bin/plasma-apply-wallpaperimage
+  usr/bin/systemctl
+  usr/bin/timeout
+  usr/bin/torbrowser-launcher
   usr/bin/systemsettings
   usr/bin/dolphin
   usr/bin/konsole
@@ -434,7 +525,7 @@ verify_required_tree() {
   local verification_mode=$3
 
   python3 - "$tree_root" "$tree_label" "$verification_mode" \
-    "$required_symlink_map" "${required_live_files[@]}" <<'PY' || \
+    "$required_symlink_map" "$chroot_root" "${required_live_files[@]}" <<'PY' || \
     die "$tree_label failed trusted-path verification"
 from __future__ import annotations
 
@@ -449,7 +540,8 @@ root = Path(sys.argv[1])
 label = sys.argv[2]
 mode = sys.argv[3]
 map_path = Path(sys.argv[4])
-required = sys.argv[5:]
+reference_root = Path(sys.argv[5])
+required = sys.argv[6:]
 
 
 def reject(message: str) -> None:
@@ -463,6 +555,12 @@ if root.is_symlink() or not root.is_dir():
 root_stat = os.lstat(root)
 if root_stat.st_uid != 0 or root_stat.st_gid != 0 or root_stat.st_mode & 0o022:
     reject(f"filesystem root is not root-owned and non-writable: {root}")
+if mode == "verify" and (reference_root.is_symlink() or not reference_root.is_dir()):
+    reject(f"trusted reference root is missing or is a symlink: {reference_root}")
+if mode == "verify":
+    reference_root_stat = os.lstat(reference_root)
+    if stat.S_IMODE(root_stat.st_mode) != stat.S_IMODE(reference_root_stat.st_mode):
+        reject("filesystem-root mode differs from the validated live filesystem")
 
 
 def validate_metadata(path: Path, relative: str, item_stat: os.stat_result) -> None:
@@ -470,6 +568,15 @@ def validate_metadata(path: Path, relative: str, item_stat: os.stat_result) -> N
         reject(f"non-root ownership on /{relative}")
     if not stat.S_ISLNK(item_stat.st_mode) and item_stat.st_mode & 0o022:
         reject(f"group/world-writable trusted path: /{relative}")
+    if mode == "verify" and not stat.S_ISLNK(item_stat.st_mode):
+        try:
+            reference_stat = os.lstat(reference_root / relative)
+        except OSError as error:
+            reject(f"cannot inspect trusted reference /{relative}: {error}")
+        if stat.S_IFMT(item_stat.st_mode) != stat.S_IFMT(reference_stat.st_mode):
+            reject(f"final ISO file type differs from its reference: /{relative}")
+        if stat.S_IMODE(item_stat.st_mode) != stat.S_IMODE(reference_stat.st_mode):
+            reject(f"final ISO mode differs from its reference: /{relative}")
 
 
 def validate_direct_parents(relative: str) -> Path:
@@ -530,6 +637,24 @@ def resolve_image_path(relative: str) -> tuple[str, os.stat_result]:
     return "/".join(resolved), target_stat
 
 
+def files_equal(first: Path, second: Path) -> bool:
+    try:
+        first_stat = os.stat(first)
+        second_stat = os.stat(second)
+        if first_stat.st_size != second_stat.st_size:
+            return False
+        with first.open("rb") as first_stream, second.open("rb") as second_stream:
+            while True:
+                first_chunk = first_stream.read(1024 * 1024)
+                second_chunk = second_stream.read(1024 * 1024)
+                if first_chunk != second_chunk:
+                    return False
+                if not first_chunk:
+                    return True
+    except OSError as error:
+        reject(f"could not compare a final ISO file with its reference: {error}")
+
+
 reference: dict[str, tuple[str, str]] = {}
 if mode == "verify":
     try:
@@ -559,11 +684,31 @@ for relative in required:
             recorded[relative] = (link_text, target)
         elif reference.get(relative) != (link_text, target):
             reject(f"symlink changed from the validated live filesystem: /{relative}")
+        comparison_target = target
     elif stat.S_ISREG(requested_stat.st_mode):
         if relative in reference:
             reject(f"validated symlink became a regular file: /{relative}")
+        comparison_target = relative
     else:
         reject(f"required path is not a regular file or approved executable symlink: /{relative}")
+
+    if mode == "verify":
+        reference_path = reference_root / comparison_target
+        final_path = root / comparison_target
+        try:
+            reference_mode = stat.S_IMODE(os.stat(reference_path).st_mode)
+            final_mode = stat.S_IMODE(os.stat(final_path).st_mode)
+        except OSError as error:
+            reject(f"could not compare final ISO metadata with its reference: {error}")
+        if final_mode != reference_mode:
+            reject(
+                "final ISO mode differs from the validated live filesystem: "
+                f"/{relative} ({final_mode:04o} != {reference_mode:04o})"
+            )
+        if not files_equal(reference_path, final_path):
+            reject(
+                f"final ISO bytes differ from the validated live filesystem: /{relative}"
+            )
 
 if mode == "record":
     lines = [
@@ -589,12 +734,22 @@ required_executable_files=(
   usr/local/bin/eos-wallpapers
   usr/local/bin/eos-welcome
   usr/local/bin/void-browser
+  usr/bin/bash
+  usr/bin/cmp
+  usr/bin/env
   usr/bin/live-config
   usr/bin/qdbus6
+  usr/bin/flock
+  usr/bin/grep
+  usr/bin/kdialog
+  usr/bin/kreadconfig6
   usr/bin/kwriteconfig6
   usr/bin/kpackagetool6
+  usr/bin/mktemp
   usr/bin/desktop-file-validate
-  usr/bin/plasma-apply-wallpaperimage
+  usr/bin/systemctl
+  usr/bin/timeout
+  usr/bin/torbrowser-launcher
   usr/bin/systemsettings
   usr/bin/dolphin
   usr/bin/konsole
@@ -623,25 +778,36 @@ verify_required_executables "$chroot_root" 'built live filesystem'
 required_packages=(
   breeze
   breeze-cursor-theme
+  bash
+  coreutils
+  diffutils
   desktop-file-utils
   fonts-hack
   fonts-inter
   fonts-noto-color-emoji
+  grep
   hicolor-icon-theme
   kde-style-breeze
   kf6-breeze-icon-theme
   kscreen
+  kdialog
   kinfocenter
+  kactivitymanagerd
   kpackagetool6
   libkf6config-bin
   plasma-desktop
   plasma-desktoptheme
   plasma-pa
+  plasma-workspace
   polkit-kde-agent-1
   powerdevil
   qdbus-qt6
+  python3
   python3-minimal
+  systemd
   systemsettings
+  torbrowser-launcher
+  util-linux
   xdg-desktop-portal-kde
 )
 for package_name in "${required_packages[@]}"; do
@@ -649,6 +815,11 @@ for package_name in "${required_packages[@]}"; do
   [ "$package_status" = installed ] || \
     die "required runtime package is not installed: $package_name"
 done
+
+PYTHONDONTWRITEBYTECODE=1 chroot "$chroot_root" \
+  /usr/local/lib/eos-privet/verify-plasma-layout \
+  --help >/dev/null || \
+  die 'EOS Plasma verifier cannot import or start with the live Python runtime'
 
 cmp -s "$wallpaper_root/cicada-default.png" \
   "$chroot_root/usr/share/wallpapers/EOSPrivet/contents/images/$wallpaper_name" || \
@@ -816,6 +987,9 @@ done
 xorriso -osirrox on -indev "$iso_artifact" \
   -extract /live/filesystem.squashfs "$final_squashfs" >/dev/null 2>&1 || \
   die 'the completed ISO does not contain /live/filesystem.squashfs'
+xorriso -assert_volid 'EOS_PRIVET' FATAL \
+  -indev "$iso_artifact" -end >/dev/null 2>&1 || \
+  die 'completed ISO does not have the exact EOS_PRIVET volume ID'
 unsquashfs -lln "$final_squashfs" > "$final_listing" || \
   die 'could not list the completed ISO SquashFS'
 

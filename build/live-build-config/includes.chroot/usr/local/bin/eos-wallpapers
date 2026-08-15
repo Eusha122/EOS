@@ -1,10 +1,20 @@
 #!/bin/sh
 set -eu
 
+# Change only the wallpaper of the KDE activity currently on screen. Plasma's
+# generic wallpaper helper iterates every activity, which is unsafe once EOS
+# gains encrypted saved profiles with independent desktop settings.
 wallpaper_dir=/usr/share/wallpapers/EOSPrivet/contents/images
 
+for required_command in grep kdialog qdbus6 timeout; do
+  command -v "$required_command" >/dev/null 2>&1 || {
+    printf 'EOS Wallpapers: required command is missing: %s\n' "$required_command" >&2
+    exit 1
+  }
+done
+
 choice="$(kdialog --title 'EOS Wallpapers' --menu \
-  'Choose an EOS Privet wallpaper for this Fresh session.' \
+  'Choose an EOS Privet wallpaper for this activity.' \
   default 'Cicada IV - default' \
   cicada-01 'Cicada I' \
   cicada-02 'Cicada II' \
@@ -23,7 +33,53 @@ esac
   exit 1
 }
 
-if ! plasma-apply-wallpaperimage "$wallpaper"; then
-  kdialog --title 'EOS Wallpapers' --error 'Plasma could not apply that wallpaper.'
+read_current_activity() {
+  timeout 3 qdbus6 org.kde.ActivityManager /ActivityManager/Activities \
+    org.kde.ActivityManager.Activities.CurrentActivity
+}
+
+activity_id="$(read_current_activity 2>/dev/null || true)"
+if ! printf '%s\n' "$activity_id" |
+  grep -Eq '^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$'; then
+  kdialog --title 'EOS Wallpapers' \
+    --error 'KDE did not provide a valid current activity. Nothing was changed.'
+  exit 1
+fi
+
+wallpaper_uri="file://$wallpaper"
+plasma_script="
+var expectedActivity = \"$activity_id\";
+var expectedImage = \"$wallpaper_uri\";
+if (currentActivity() !== expectedActivity) {
+    throw new Error(\"EOS activity changed before wallpaper setup\");
+}
+var activityDesktops = desktopsForActivity(expectedActivity);
+if (activityDesktops.length === 0) {
+    throw new Error(\"EOS current activity has no desktop containment\");
+}
+for (var index = 0; index < activityDesktops.length; index++) {
+    var desktop = activityDesktops[index];
+    desktop.wallpaperPlugin = \"org.kde.image\";
+    desktop.currentConfigGroup = [\"Wallpaper\", \"org.kde.image\", \"General\"];
+    desktop.writeConfig(\"Image\", expectedImage);
+    desktop.writeConfig(\"FillMode\", 2);
+    if (desktop.wallpaperPlugin !== \"org.kde.image\" ||
+        desktop.readConfig(\"Image\") !== expectedImage ||
+        String(desktop.readConfig(\"FillMode\")) !== \"2\") {
+        throw new Error(\"EOS wallpaper settings failed their read-back check\");
+    }
+}
+if (currentActivity() !== expectedActivity) {
+    throw new Error(\"EOS activity changed during wallpaper setup\");
+}
+print(\"EOS_WALLPAPER_OK:\" + activityDesktops.length);
+"
+
+if ! apply_result="$(timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.evaluateScript "$plasma_script" 2>/dev/null)" ||
+  ! printf '%s\n' "$apply_result" | grep -Eq '^EOS_WALLPAPER_OK:[1-9][0-9]*$' ||
+  [ "$(read_current_activity 2>/dev/null || true)" != "$activity_id" ]; then
+  kdialog --title 'EOS Wallpapers' \
+    --error 'Plasma could not safely apply that wallpaper to the current activity.'
   exit 1
 fi

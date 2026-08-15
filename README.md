@@ -5,7 +5,7 @@ EOS Privet is being built as a privacy-first, USB-live Linux distribution for da
 ## Product direction
 
 - **Identity:** a plug-and-use live OS that boots from USB, starts clean, and keeps privacy features front and center without pretending to be magic.
-- **Foundation:** a live `amd64` hybrid ISO for UEFI PCs, with legacy BIOS support where the base toolchain supports it.
+- **Foundation:** a live `amd64` hybrid ISO. UEFI has reached the VM desktop; the build now validates both UEFI and legacy-BIOS boot entries, while an actual legacy-BIOS boot test remains pending.
 - **Desktop:** KDE Plasma 6 on Wayland. An X11 fallback is a future compatibility task and is not shipped in the current Phase 2d image.
 - **Boot model:** USB-live first. The core experience should work well without installation to an internal disk.
 - **Boot experience:** before the desktop loads, show a hacker-style text screen with simple numbered choices for fresh mode or unlocking saved storage.
@@ -34,11 +34,11 @@ Build the ISO from Linux, not directly from Windows. The tested and supported pr
 sudo bash build/scripts/build-iso.sh
 ```
 
-The output is written to `out/`. Before publishing it, the build opens the completed ISO and verifies its SquashFS payload, EOS identity and wallpaper bytes, trusted-file ownership, and BIOS/UEFI live-user arguments. Build scripts intentionally keep generated files out of the source tree.
+The output is written to `out/`. Before publishing it, the single-writer build runs the Plasma-layout regression suite and JavaScript/shell/Python syntax checks, opens the completed ISO, compares required SquashFS file bytes and Unix modes with the validated chroot, and verifies EOS/volume identity, all wallpapers, runtime closure, trusted-file/symlink safety, and every normal/failsafe BIOS/UEFI live-user entry. The checksum is published last and covers the ISO plus its package and build-information sidecars. Build scripts intentionally keep generated files out of the source tree.
 
 ## First milestones
 
 1. Produce and test the first EOS Privet USB-live ISO in a virtual machine.
 2. Boot-verify the Phase 2d EOS Plasma theme, dock, top bar, and wallpaper; then complete login-screen and boot-splash branding.
-3. Complete the existing text-mode boot gate, verify the privacy browser path, and implement encrypted persistence.
-4. Add welcome-screen privacy guidance, signed updates, and the future EOS desktop app.
+3. Regression-test the existing text-mode boot gate, verify the privacy browser path, and implement encrypted persistence.
+4. Expand the existing Fresh welcome guidance, add signed updates, and integrate the future EOS desktop app.

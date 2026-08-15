@@ -41,18 +41,18 @@ Security principles for every phase:
 ### Phase 1 — Repeatable ISO foundation
 
 - [x] Set up a clean Linux build VM (Debian 13 VM produced the first ISO artifact).
-- [-] Convert the current transitional Kali-compatible build configuration to Debian stable `live-build` (source converted to Debian 13, rebuilt, and boot-tested in UEFI VirtualBox; first `phase2b` attempt exposed automatic firmware/recommendation expansion, which is now replaced by explicit package selection and a guard against download-at-install Broadcom packages; repeat-build verification remains).
+- [-] Maintain the converted Debian 13 `live-build` configuration (manifest-enforced package profiles, undeclared-list rejection, a single-writer lock, decoded mount checks, and guards against download-at-install Broadcom packages are implemented; repeat-build verification remains).
 - [-] Produce a bootable UEFI ISO, then test legacy BIOS support where feasible (first UEFI VirtualBox boot reached the live menu, EOS gate, and KDE Fresh desktop).
-- [-] Record exact build commands and package versions (Phase 2d writes a resolved package TSV and build-information file beside the ISO and validates the completed SquashFS plus BIOS/UEFI boot arguments before publishing; successful rebuild verification remains).
+- [-] Record exact build commands and package versions (Phase 2d writes a resolved package TSV and build-information file beside the ISO, validates the ISO volume, compares every required SquashFS file's bytes and Unix mode with the checked chroot, validates every normal/failsafe BIOS/UEFI boot entry, and publishes one checksum covering all three files; successful rebuild verification remains).
 - [x] Add an ISO checksum and verification instructions.
 
 **Done when:** the same source creates a bootable test ISO twice, and both builds can be checked with a checksum.
 
 ### Phase 2 — Fresh live session
 
-- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (Phase 2c restored live-user creation. Phase 2d explicitly restores settings, power, display, portal, audio, policy-agent, icon, and font packages that recommendation trimming had omitted; clean build and VM checks remain).
+- [-] Configure the live user, KDE Plasma session, networking, sound, file manager, and power controls (Phase 2c restored live-user creation. Phase 2d explicitly includes settings/System Information, power, display, portal, audio, policy-agent, icon, font, and layout-verification packages; clean build and VM checks remain).
 - [ ] Ensure normal session data is temporary and does not use the host computer's internal disk.
-- [-] Add safe shutdown and “fresh session” explanations in the welcome screen (plain-language source exists and waits for the exact verified desktop schema; Phase 2d VM interaction test remains).
+- [-] Add safe shutdown and “fresh session” explanations in the welcome screen (plain-language source waits for the committed `phase2d-3` schema without racing slow setup, and records success only after the dialog opens; Phase 2d VM interaction test remains).
 - [ ] Test graphics, Wi-Fi, keyboard, touchpad, and shutdown in VirtualBox.
 
 **Done when:** selecting Fresh starts a usable desktop and its test files disappear after restart.
@@ -81,7 +81,7 @@ Security principles for every phase:
 
 ### Phase 5 — Daily-use desktop and EOS visual system
 
-- [-] Create an original EOS Privet Plasma theme using the supplied logo (valid Plasma 6 Global Theme, dark defaults, EOS icons, Cicada IV wallpaper package, EOS `os-release` identity, native layout repair, and completed-ISO validation are implemented; VM verification remains).
+- [-] Create an original EOS Privet Plasma theme using the supplied logo (valid Plasma 6 Global Theme, dark defaults, EOS icons, all four Cicada wallpapers, dual-path EOS `os-release` identity, current-activity-bound transactional rollback, strict live/dual-persisted layout verification, 34 regression tests, and completed-ISO byte/mode validation are implemented; VM verification remains).
 - [-] Configure a smooth, restrained macOS-inspired top bar, dock, icons, login screen, and wallpaper (deterministic top bar and centered native Plasma dock are implemented; SDDM visual branding and animation tuning remain).
 - [ ] Provide a reduced-effects option for older PCs.
 - [-] Add welcome, Wi-Fi, file-saving, and privacy help screens in plain language (the first Fresh-mode guide exists; saved-storage guidance and VM verification remain).
@@ -92,7 +92,7 @@ Security principles for every phase:
 ### Phase 6 — Hardening, updates, and recovery
 
 - [ ] Enable and review standard Linux hardening: timely security updates, AppArmor profiles where available, least-privilege services, and a minimal enabled-service set.
-- [ ] Add verified update and release signing policy; protect release keys offline.
+- [ ] Add verified update and release signing policy; protect release keys offline. Development SHA-256 files detect corruption but are not an authenticated public-release signature.
 - [ ] Decide Secure Boot support and document its trust model.
 - [ ] Add recovery guidance for forgotten passphrases: encrypted data cannot be recovered without the passphrase.
 - [ ] Run vulnerability and configuration reviews before each release candidate.

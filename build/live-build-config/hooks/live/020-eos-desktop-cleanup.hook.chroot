@@ -44,6 +44,7 @@ rm -f /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc
 # freedesktop clients read /etc/os-release before /usr/lib/os-release. Publish
 # the same EOS identity at both locations so System Information and terminal
 # tools cannot fall back to Debian's base identity.
+rm -f /etc/os-release
 install -m 0644 /usr/lib/os-release /etc/os-release
 
 # Refresh the caches after deleting Debian launchers and installing EOS icons.

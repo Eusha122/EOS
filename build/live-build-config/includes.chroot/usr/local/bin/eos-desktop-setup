@@ -1,118 +1,135 @@
 #!/bin/sh
-set -u
+set -eu
 umask 077
 
-# Plasma reads the EOS Global Theme before first login. This script is a
-# bounded, versioned repair path for incomplete first-session configuration;
-# it is not the primary theming mechanism and it never overwrites a later
-# persisted user's layout after this schema has been applied successfully.
+# EOS Privet first-session desktop transaction.
+#
+# The installed Global Theme is the primary source of defaults. This bounded
+# repair applies its panel layout through Plasma's native D-Bus method, proves
+# both the live and on-disk result, and commits markers only after every file is
+# durable. Any failure restores every user file touched by the transaction.
 theme_id=org.eos.privet.desktop
 fallback_theme_id=org.kde.breeze.desktop
-schema_version=phase2d-2
+schema_version=phase2d-3
+factory_layout_version=factory-layout-v1
 wallpaper=/usr/share/wallpapers/EOSPrivet/contents/images/1672x941.png
 config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+runtime_home="${XDG_RUNTIME_DIR:-$state_home}"
 marker_dir="$config_home/eos-privet"
-marker="$marker_dir/desktop-schema"
+schema_marker="$marker_dir/desktop-schema"
+factory_marker="$marker_dir/factory-layout-applied"
 log_dir="$state_home/eos-privet"
 log="$log_dir/desktop-setup.log"
+lock="$runtime_home/eos-privet-desktop-setup.lock"
 plasma_config="$config_home/plasma-org.kde.plasma.desktop-appletsrc"
+shell_config="$config_home/plasmashellrc"
+kde_config="$config_home/kdeglobals"
+plasma_style_config="$config_home/plasmarc"
 layout_snapshot="$log_dir/live-layout.js"
 layout_previous="$log_dir/live-layout.previous.js"
-layout_backup="$log_dir/plasma-layout.before-$schema_version.conf"
-config_previous="$log_dir/plasma-layout.persisted.previous.conf"
 layout_verifier=/usr/local/lib/eos-privet/verify-plasma-layout
-rollback_needed=0
-had_previous_config=0
+session_mode_file=/run/eos-privet/session-mode
+transaction_dir=
+transaction_active=0
+failure_message=
+current_activity=
 
-mkdir -p "$marker_dir" "$log_dir"
+mkdir -p "$marker_dir" "$log_dir" "$runtime_home"
 exec >>"$log" 2>&1
 
 printf '%s\n' 'EOS desktop setup started'
 date -u '+%Y-%m-%dT%H:%M:%SZ'
 
-restore_previous_layout() {
-  [ "$rollback_needed" -eq 1 ] || return 0
-  rollback_needed=0
-  printf '%s\n' 'Restoring the desktop layout that existed before the failed EOS reset.'
-
-  if [ "$had_previous_config" -eq 1 ] && [ -r "$layout_backup" ]; then
-    rollback_tmp="$plasma_config.eos-rollback.$$"
-    rm -f "$rollback_tmp"
-    if cp -p "$layout_backup" "$rollback_tmp" && mv -f "$rollback_tmp" "$plasma_config"; then
-      sync "$plasma_config" 2>/dev/null || true
-      if command -v systemctl >/dev/null 2>&1; then
-        timeout 15 systemctl --user restart plasma-plasmashell.service || true
-      fi
-      return 0
-    fi
-    rm -f "$rollback_tmp"
-  fi
-
-  # A first login may not have had a config file to restore. In that unusual
-  # case, request Plasma's installed Breeze layout so the user still has a
-  # usable panel instead of a half-created desktop.
-  timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$fallback_theme_id" || true
+for required_command in cmp flock grep kdialog kreadconfig6 kwriteconfig6 mktemp \
+  qdbus6 systemctl timeout; do
+  command -v "$required_command" >/dev/null 2>&1 || {
+    printf 'ERROR: required command is missing: %s\n' "$required_command"
+    exit 1
+  }
+done
+[ -r "$wallpaper" ] || {
+  printf 'ERROR: EOS wallpaper is missing: %s\n' "$wallpaper"
+  exit 1
 }
-
-fail() {
-  message=$1
-  restore_previous_layout
-  printf 'ERROR: %s\n' "$message"
-  if command -v kdialog >/dev/null 2>&1; then
-    kdialog --title 'EOS Privet desktop error' --error "$message\n\nDetails: $log" &
-  fi
+[ -x "$layout_verifier" ] || {
+  printf 'ERROR: EOS Plasma layout verifier is missing: %s\n' "$layout_verifier"
   exit 1
 }
 
-[ -r "$wallpaper" ] || fail "EOS wallpaper is missing: $wallpaper"
-command -v kwriteconfig6 >/dev/null 2>&1 || fail 'kwriteconfig6 is not installed.'
-command -v qdbus6 >/dev/null 2>&1 || fail 'qdbus6 is not installed.'
-command -v timeout >/dev/null 2>&1 || fail 'The timeout command is not installed.'
-command -v plasma-apply-wallpaperimage >/dev/null 2>&1 || fail 'Plasma wallpaper support is not installed.'
-[ -x "$layout_verifier" ] || fail 'The EOS Plasma layout verifier is missing.'
-
-# A current marker means the factory layout already passed live verification.
-# Exit before writing user configuration so future encrypted saved sessions can
-# customize their desktop without this first-login repair overwriting it.
-if [ "${1:-}" != "--repair" ] && [ -r "$marker" ] && \
-   [ "$(cat "$marker" 2>/dev/null || true)" = "$schema_version" ]; then
-  printf '%s\n' 'EOS desktop schema is already current; preserving user customization.'
+# One setup process may own user Plasma state at a time. A duplicate autostart
+# or manual invocation exits harmlessly instead of sharing snapshots.
+exec 9>"$lock"
+if ! flock -n 9; then
+  printf '%s\n' 'Another EOS desktop setup transaction is already running.'
   exit 0
 fi
 
-# Keep the selected identity explicit in the user's config so Debian's
-# desktop-base fallback can never replace it later in the same session.
-kwriteconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage "$theme_id" || \
-  fail 'Could not save the EOS Global Theme selection.'
-kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle Breeze || \
-  fail 'Could not save the EOS widget style.'
-kwriteconfig6 --file kdeglobals --group General --key BrowserApplication void-browser.desktop || \
-  fail 'Could not save Void as the default browser.'
-kwriteconfig6 --file kdeglobals --group General --key ColorScheme BreezeDark || \
-  fail 'Could not save the EOS color scheme.'
-kwriteconfig6 --file kdeglobals --group Icons --key Theme breeze-dark || \
-  fail 'Could not save the EOS icon theme.'
-kwriteconfig6 --file plasmarc --group Theme --key name breeze-dark || \
-  fail 'Could not save the EOS Plasma style.'
+factory_reset=0
+case "${1:-}" in
+  '') ;;
+  --factory-reset) factory_reset=1 ;;
+  *)
+    printf 'ERROR: unsupported option: %s\n' "$1"
+    exit 2
+    ;;
+esac
 
-capture_live_layout() {
-  snapshot_tmp="$layout_snapshot.tmp.$$"
-  rm -f "$snapshot_tmp"
-  if timeout 3 qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.dumpCurrentLayoutJS > "$snapshot_tmp" && \
-    [ -s "$snapshot_tmp" ]; then
-    mv -f "$snapshot_tmp" "$layout_snapshot"
-    return 0
+# A factory marker is deliberately separate from the migration schema. Future
+# schema upgrades must never erase a saved user's customized layout. A legacy
+# schema marker is also treated as proof that a factory layout was once applied.
+if [ "$factory_reset" -eq 0 ]; then
+  if [ -s "$factory_marker" ] || [ -s "$schema_marker" ]; then
+    printf '%s\n' 'Factory desktop already applied; preserving user customization.'
+    exit 0
   fi
-  rm -f "$snapshot_tmp"
+  session_mode=$(cat "$session_mode_file" 2>/dev/null || true)
+  if [ "$session_mode" != fresh ]; then
+    printf '%s\n' 'Not a Fresh session; refusing an automatic factory layout reset.'
+    exit 0
+  fi
+fi
+
+read_current_activity() {
+  timeout 3 qdbus6 org.kde.ActivityManager /ActivityManager/Activities \
+    org.kde.ActivityManager.Activities.CurrentActivity
+}
+
+valid_activity_id() {
+  printf '%s\n' "$1" |
+    grep -Eq '^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$'
+}
+
+wait_for_current_activity() {
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    candidate_activity=$(read_current_activity 2>/dev/null || true)
+    if valid_activity_id "$candidate_activity"; then
+      current_activity=$candidate_activity
+      return 0
+    fi
+    sleep 1
+  done
   return 1
 }
 
-live_layout_matches_schema() {
-  [ -s "$layout_snapshot" ] &&
-    "$layout_verifier" --live "$layout_snapshot" >/dev/null 2>&1
+capture_live_layout() {
+  snapshot_tmp="$layout_snapshot.tmp.$$"
+  rm -f -- "$snapshot_tmp"
+  if [ -n "$current_activity" ]; then
+    activity_before=$(read_current_activity 2>/dev/null || true)
+    [ "$activity_before" = "$current_activity" ] || return 1
+  fi
+  if timeout 3 qdbus6 org.kde.plasmashell /PlasmaShell \
+      org.kde.PlasmaShell.dumpCurrentLayoutJS >"$snapshot_tmp" && \
+    [ -s "$snapshot_tmp" ] &&
+    { [ -z "$current_activity" ] ||
+      [ "$(read_current_activity 2>/dev/null || true)" = "$current_activity" ]; }; then
+    mv -f -- "$snapshot_tmp" "$layout_snapshot"
+    return 0
+  fi
+  rm -f -- "$snapshot_tmp"
+  return 1
 }
 
 live_layout_is_loaded() {
@@ -123,8 +140,13 @@ live_layout_is_loaded() {
     grep -Fq '"panels": [' "$layout_snapshot"
 }
 
+live_layout_matches_schema() {
+  [ -s "$layout_snapshot" ] &&
+    "$layout_verifier" --live "$layout_snapshot" >/dev/null 2>&1
+}
+
 wait_for_plasma_ready() {
-  rm -f "$layout_previous"
+  rm -f -- "$layout_previous"
   stable_snapshots=0
   deadline=$(($(date +%s) + 60))
   while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -134,8 +156,20 @@ wait_for_plasma_ready() {
         [ "$stable_snapshots" -ge 1 ] && return 0
       else
         stable_snapshots=0
-        cp "$layout_snapshot" "$layout_previous" || return 1
+        cp -- "$layout_snapshot" "$layout_previous" || return 1
       fi
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_eos_panels() {
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if capture_live_layout &&
+      "$layout_verifier" --live "$layout_snapshot" --panels-only >/dev/null 2>&1; then
+      return 0
     fi
     sleep 1
   done
@@ -152,63 +186,271 @@ wait_for_eos_schema() {
 }
 
 wait_for_persisted_schema() {
-  rm -f "$config_previous"
+  persisted_previous="$transaction_dir/applets.persisted.previous"
+  shell_previous="$transaction_dir/shell.persisted.previous"
+  rm -f -- "$persisted_previous" "$shell_previous"
   deadline=$(($(date +%s) + 60))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if [ -s "$plasma_config" ] && \
-       "$layout_verifier" --config "$plasma_config" >/dev/null 2>&1; then
-      if [ -s "$config_previous" ] && cmp -s "$plasma_config" "$config_previous"; then
+    if capture_live_layout && [ -s "$plasma_config" ] && [ -s "$shell_config" ] &&
+      "$layout_verifier" --config "$plasma_config" \
+        --shell-config "$shell_config" --live-context "$layout_snapshot" \
+        --activity-id "$current_activity" \
+        >/dev/null 2>&1; then
+      if [ -s "$persisted_previous" ] && [ -s "$shell_previous" ] &&
+        cmp -s "$plasma_config" "$persisted_previous" &&
+        cmp -s "$shell_config" "$shell_previous"; then
         return 0
       fi
-      cp "$plasma_config" "$config_previous" || return 1
+      cp -- "$plasma_config" "$persisted_previous" || return 1
+      cp -- "$shell_config" "$shell_previous" || return 1
     else
-      rm -f "$config_previous"
+      rm -f -- "$persisted_previous" "$shell_previous"
     fi
     sleep 1
   done
   return 1
 }
 
-# XDG autostart phase 2 normally runs after plasmashell. A bounded readiness
-# check handles slower VM graphics and real hardware without one guessed delay.
-wait_for_plasma_ready || fail 'Plasma did not become ready within the 60-second safety limit.'
+visual_preferences_match() {
+  [ "$(kreadconfig6 --file "$kde_config" --group KDE --key LookAndFeelPackage)" = "$theme_id" ] &&
+    [ "$(kreadconfig6 --file "$kde_config" --group KDE --key widgetStyle)" = Breeze ] &&
+    [ "$(kreadconfig6 --file "$kde_config" --group General --key BrowserApplication)" = void-browser.desktop ] &&
+    [ "$(kreadconfig6 --file "$kde_config" --group General --key ColorScheme)" = BreezeDark ] &&
+    [ "$(kreadconfig6 --file "$kde_config" --group Icons --key Theme)" = breeze-dark ] &&
+    [ "$(kreadconfig6 --file "$plasma_style_config" --group Theme --key name)" = breeze-dark ]
+}
 
-if ! live_layout_matches_schema; then
-  printf '%s\n' 'Applying the EOS Global Theme layout through Plasma.'
-  if [ -r "$plasma_config" ]; then
-    cp -p "$plasma_config" "$layout_backup" || \
-      fail 'Could not back up the previous Plasma layout before repair.'
-    had_previous_config=1
+snapshot_file() {
+  snapshot_path=$1
+  snapshot_name=$2
+  if [ -e "$snapshot_path" ] || [ -L "$snapshot_path" ]; then
+    [ -f "$snapshot_path" ] && [ ! -L "$snapshot_path" ] || return 1
+    cp -p -- "$snapshot_path" "$transaction_dir/$snapshot_name.data" || return 1
+    printf '%s\n' present >"$transaction_dir/$snapshot_name.state" || return 1
+  else
+    printf '%s\n' absent >"$transaction_dir/$snapshot_name.state" || return 1
   fi
-  rollback_needed=1
+}
 
-  # This is Plasma's supported reset path for a Global Theme. It validates the
-  # package, clears the old containment config, and reloads the theme layout in
-  # Plasma's event loop instead of injecting JavaScript into a half-loaded UI.
+restore_file() {
+  restore_path=$1
+  restore_name=$2
+  restore_state=$(cat "$transaction_dir/$restore_name.state" 2>/dev/null || true)
+  case "$restore_state" in
+    present)
+      restore_tmp="$restore_path.eos-rollback.$$"
+      rm -f -- "$restore_tmp"
+      cp -p -- "$transaction_dir/$restore_name.data" "$restore_tmp" &&
+        mv -f -- "$restore_tmp" "$restore_path"
+      ;;
+    absent)
+      rm -f -- "$restore_path"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+begin_transaction() {
+  transaction_dir=$(mktemp -d "$log_dir/desktop-transaction.XXXXXX") || return 1
+  if ! snapshot_file "$kde_config" kdeglobals ||
+    ! snapshot_file "$plasma_style_config" plasmarc ||
+    ! snapshot_file "$plasma_config" appletsrc ||
+    ! snapshot_file "$shell_config" plasmashellrc ||
+    ! snapshot_file "$schema_marker" schema-marker ||
+    ! snapshot_file "$factory_marker" factory-marker ||
+    ! cp -- "$layout_snapshot" "$transaction_dir/live-layout.before.js"; then
+    case "$transaction_dir" in
+      "$log_dir"/desktop-transaction.*) rm -rf -- "$transaction_dir" ;;
+    esac
+    transaction_dir=
+    return 1
+  fi
+  transaction_active=1
+}
+
+stop_plasma_shell() {
+  timeout 20 systemctl --user stop plasma-plasmashell.service
+}
+
+start_plasma_shell() {
+  timeout 20 systemctl --user start plasma-plasmashell.service
+}
+
+wait_for_previous_live_layout() {
+  previous_live="$transaction_dir/live-layout.before.js"
+  deadline=$(($(date +%s) + 60))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if capture_live_layout &&
+      "$layout_verifier" --compare-live "$previous_live" "$layout_snapshot" \
+        >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+restore_previous_state() {
+  printf '%s\n' 'Restoring all desktop files from the pre-reset transaction.'
+  previous_applet_state=$(cat "$transaction_dir/appletsrc.state" 2>/dev/null || true)
+  shell_stopped=0
+  if [ "$previous_applet_state" = present ]; then
+    # Stop first: a graceful shutdown is allowed to sync Plasma's in-memory
+    # state, so restoring files before the stop would race that final write.
+    stop_plasma_shell || return 1
+    shell_stopped=1
+  fi
+
+  restore_ok=1
+  restore_file "$kde_config" kdeglobals || restore_ok=0
+  restore_file "$plasma_style_config" plasmarc || restore_ok=0
+  restore_file "$plasma_config" appletsrc || restore_ok=0
+  restore_file "$shell_config" plasmashellrc || restore_ok=0
+  restore_file "$schema_marker" schema-marker || restore_ok=0
+  restore_file "$factory_marker" factory-marker || restore_ok=0
+  if [ "$restore_ok" -ne 1 ]; then
+    [ "$shell_stopped" -eq 0 ] || start_plasma_shell >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  if ! sync "$config_home" 2>/dev/null; then
+    [ "$shell_stopped" -eq 0 ] || start_plasma_shell >/dev/null 2>&1 || true
+    return 1
+  fi
+  if [ "$previous_applet_state" = present ]; then
+    start_plasma_shell || return 1
+    wait_for_previous_live_layout || return 1
+    return 0
+  fi
+
+  # If this was a truly empty first login there is no prior containment file
+  # to reload. Persist and load Breeze as a conservative usable fallback.
+  kwriteconfig6 --file "$kde_config" --group KDE \
+    --key LookAndFeelPackage "$fallback_theme_id" || return 1
+  kwriteconfig6 --file "$plasma_style_config" --group Theme \
+    --key name breeze-dark || return 1
   timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$theme_id" || \
-    fail 'Plasma rejected the EOS Global Theme layout.'
+    org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$fallback_theme_id" || return 1
+  wait_for_plasma_ready || return 1
+  sync "$config_home" 2>/dev/null || return 1
+}
 
-  plasma-apply-wallpaperimage "$wallpaper" || \
-    fail 'Plasma could not apply the EOS wallpaper.'
-fi
+remove_transaction() {
+  [ -n "$transaction_dir" ] || return 0
+  case "$transaction_dir" in
+    "$log_dir"/desktop-transaction.*) rm -rf -- "$transaction_dir" ;;
+    *) return 1 ;;
+  esac
+  transaction_dir=
+}
 
-wait_for_eos_schema || \
-  fail 'EOS did not reach its exact top-bar, dock, launcher, and wallpaper schema.'
+show_failure() {
+  display_message=$1
+  kdialog --title 'EOS Privet desktop error' \
+    --error "$display_message\n\nDetails: $log" >/dev/null 2>&1 &
+}
 
-# Plasma writes containment configuration asynchronously. Require two
-# identical, fully validated on-disk snapshots before recording success, so a
-# sudden shutdown cannot leave a success marker beside a partial layout.
-wait_for_persisted_schema || \
-  fail 'Plasma did not safely persist the verified EOS desktop layout.'
-sync "$plasma_config" || fail 'Could not flush the EOS Plasma configuration to storage.'
+on_exit() {
+  exit_status=$?
+  trap - EXIT HUP INT TERM
+  set +e
+  if [ "$exit_status" -ne 0 ] && [ "$transaction_active" -eq 1 ]; then
+    if restore_previous_state; then
+      transaction_active=0
+      remove_transaction
+      rollback_note='The previous desktop was restored and verified.'
+    else
+      rollback_note="Automatic rollback could not be verified. Recovery data remains in $transaction_dir"
+    fi
+    printf '%s\n' "$rollback_note"
+  else
+    rollback_note=
+  fi
+  if [ "$exit_status" -ne 0 ]; then
+    [ -n "$failure_message" ] || failure_message='EOS desktop setup stopped unexpectedly.'
+    printf 'ERROR: %s\n' "$failure_message"
+    show_failure "$failure_message\n$rollback_note"
+  fi
+  exit "$exit_status"
+}
 
-marker_tmp="$marker.tmp.$$"
-rm -f "$marker_tmp"
-printf '%s\n' "$schema_version" > "$marker_tmp" || \
-  fail 'Could not stage the verified EOS desktop schema marker.'
-mv -f "$marker_tmp" "$marker" || \
+fail() {
+  failure_message=$1
+  exit 1
+}
+
+trap on_exit EXIT
+trap 'fail "EOS desktop setup was interrupted before it could commit."' HUP INT TERM
+
+# Autostart phase 2 normally runs after plasmashell. Use a bounded stability
+# check instead of one guessed delay so slow VM graphics do not race setup.
+wait_for_plasma_ready || fail 'Plasma did not become ready within the 60-second safety limit.'
+wait_for_current_activity ||
+  fail 'KDE did not expose one valid current activity within the 60-second safety limit.'
+capture_live_layout && live_layout_is_loaded ||
+  fail 'Could not bind the live Plasma snapshot to the current KDE activity.'
+begin_transaction || fail 'Could not create a complete desktop rollback snapshot.'
+
+# Save the visible EOS identity to explicit user configuration. The values are
+# read back before any destructive panel reset is allowed to continue.
+kwriteconfig6 --file "$kde_config" --group KDE --key LookAndFeelPackage "$theme_id" ||
+  fail 'Could not save the EOS Global Theme selection.'
+kwriteconfig6 --file "$kde_config" --group KDE --key widgetStyle Breeze ||
+  fail 'Could not save the EOS widget style.'
+kwriteconfig6 --file "$kde_config" --group General --key BrowserApplication \
+  void-browser.desktop || fail 'Could not save Void as the default browser.'
+kwriteconfig6 --file "$kde_config" --group General --key ColorScheme BreezeDark ||
+  fail 'Could not save the EOS color scheme.'
+kwriteconfig6 --file "$kde_config" --group Icons --key Theme breeze-dark ||
+  fail 'Could not save the EOS icon theme.'
+kwriteconfig6 --file "$plasma_style_config" --group Theme --key name breeze-dark ||
+  fail 'Could not save the EOS Plasma style.'
+
+visual_preferences_match ||
+  fail 'EOS visual preferences did not survive their read-back check.'
+
+printf '%s\n' 'Applying the EOS Global Theme layout through Plasma.'
+timeout 5 qdbus6 org.kde.plasmashell /PlasmaShell \
+  org.kde.PlasmaShell.loadLookAndFeelDefaultLayout "$theme_id" ||
+  fail 'Plasma rejected the EOS Global Theme layout.'
+
+wait_for_eos_panels || fail 'Plasma did not create the exact EOS top bar and dock.'
+wait_for_eos_schema ||
+  fail 'EOS did not reach its exact bar, dock, launcher, and wallpaper schema.'
+wait_for_persisted_schema ||
+  fail 'Plasma did not safely persist both EOS desktop configuration files.'
+
+sync "$plasma_config" "$shell_config" "$kde_config" "$plasma_style_config" ||
+  fail 'Could not flush the EOS desktop configuration to storage.'
+"$layout_verifier" --config "$plasma_config" --shell-config "$shell_config" \
+  --live-context "$layout_snapshot" --activity-id "$current_activity" ||
+  fail 'The persisted EOS desktop changed during its final storage flush.'
+capture_live_layout && live_layout_matches_schema ||
+  fail 'The live EOS desktop changed before setup could be committed.'
+visual_preferences_match ||
+  fail 'EOS visual preferences changed before setup could be committed.'
+
+write_marker() {
+  marker_path=$1
+  marker_value=$2
+  marker_tmp="$marker_path.tmp.$$"
+  rm -f -- "$marker_tmp"
+  printf '%s\n' "$marker_value" >"$marker_tmp" && mv -f -- "$marker_tmp" "$marker_path"
+}
+
+# The factory marker is committed first; the schema marker is the welcome
+# process's completion signal and is therefore committed last.
+write_marker "$factory_marker" "$factory_layout_version" ||
+  fail 'Could not record the one-time EOS factory layout marker.'
+write_marker "$schema_marker" "$schema_version" ||
   fail 'Could not record the verified EOS desktop schema.'
-sync "$marker" || fail 'Could not flush the EOS desktop schema marker.'
-rollback_needed=0
-printf '%s\n' 'EOS desktop setup verified successfully.'
+sync "$factory_marker" "$schema_marker" ||
+  fail 'Could not flush the EOS desktop completion markers.'
+
+transaction_active=0
+if ! remove_transaction; then
+  printf 'WARNING: completed transaction cleanup failed: %s\n' "$transaction_dir"
+fi
+printf '%s\n' 'EOS desktop setup verified and committed successfully.'

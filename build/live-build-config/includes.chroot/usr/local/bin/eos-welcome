@@ -2,19 +2,23 @@
 set -eu
 umask 077
 
-schema_version=phase2d-2
+schema_version=phase2d-3
 runtime_home="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}"
 shown_marker="$runtime_home/eos-privet-welcome-shown"
 desktop_marker="${XDG_CONFIG_HOME:-$HOME/.config}/eos-privet/desktop-schema"
+session_mode_file=/run/eos-privet/session-mode
+autostart=0
 
 if [ "${1:-}" = "--autostart" ]; then
+  autostart=1
   [ -e "$shown_marker" ] && exit 0
+  [ "$(cat "$session_mode_file" 2>/dev/null || true)" = fresh ] || exit 0
 
   # Open only after the versioned desktop setup has succeeded. Do not race
   # Plasma with an arbitrary fixed delay or accept an older schema marker.
   attempt=0
   recorded_schema=
-  while [ "$attempt" -lt 150 ]; do
+  while [ "$attempt" -lt 360 ]; do
     if [ -r "$desktop_marker" ]; then
       recorded_schema=$(cat "$desktop_marker" 2>/dev/null || true)
       [ "$recorded_schema" = "$schema_version" ] && break
@@ -25,17 +29,32 @@ if [ "${1:-}" = "--autostart" ]; then
   [ "$recorded_schema" = "$schema_version" ] || exit 0
 
   mkdir -p "$runtime_home"
-  : > "$shown_marker"
 fi
+
+mark_shown() {
+  [ "$autostart" -eq 0 ] || : > "$shown_marker"
+}
 
 message='<h2>Welcome to EOS Privet</h2>
 <p><b>You are using Fresh mode.</b> This desktop is temporary. Files and settings stay only until you shut down unless you later unlock encrypted USB storage.</p>
 <p><b>Void</b> is the privacy browser. It uses the Tor Browser path, but Tor cannot make unsafe downloads, logins, or compromised hardware safe.</p>
 <p>Use the folder icon for files, the network icon for Wi-Fi, and the power menu when you are finished.</p>'
 
+dialog_status=0
 if kdialog --title 'EOS Privet - Fresh session' \
   --yesno "$message" \
   --yes-label 'Open Void' \
   --no-label 'Continue'; then
+  mark_shown
   exec void-browser
+else
+  dialog_status=$?
 fi
+
+# A normal No/Continue response is success. Do not suppress a retry on the
+# next session if the dialog itself could not connect to the desktop.
+if [ "$dialog_status" -eq 1 ]; then
+  mark_shown
+  exit 0
+fi
+exit "$dialog_status"

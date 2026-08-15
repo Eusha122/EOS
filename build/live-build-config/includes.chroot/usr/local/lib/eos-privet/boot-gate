@@ -11,7 +11,6 @@ exec </dev/tty1 >/dev/tty1 2>&1
 esc="$(printf '\033')"
 
 draw_menu() {
-  clear
   printf '%s[2J%s[H%s[?25l' "$esc" "$esc" "$esc"
   cat <<'SCREEN'
 

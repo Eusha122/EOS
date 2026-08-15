@@ -30,9 +30,6 @@ for (var p = 0; p < oldPanels.length; p++) {
 }
 
 var activityDesktops = desktopsForActivity(currentActivity());
-if (activityDesktops.length === 0) {
-    activityDesktops = desktops();
-}
 for (var d = 0; d < activityDesktops.length; d++) {
     activityDesktops[d].wallpaperPlugin = "org.kde.image";
     activityDesktops[d].currentConfigGroup = ["Wallpaper", "org.kde.image", "General"];
@@ -43,6 +40,7 @@ for (var d = 0; d < activityDesktops.length; d++) {
 // A slim status bar keeps system controls visible without copying Apple UI.
 var topBar = new Panel();
 topBar.location = "top";
+topBar.alignment = "left";
 topBar.lengthMode = "fill";
 topBar.hiding = "none";
 topBar.height = Math.round(gridUnit * 1.9);
@@ -51,7 +49,6 @@ var launcher = addWidgetIfAvailable(topBar, "org.kde.plasma.kickoff");
 if (launcher !== null) {
     launcher.currentConfigGroup = ["General"];
     launcher.writeConfig("icon", "eos-privet");
-    launcher.globalShortcut = "Alt+F1";
 }
 addWidgetIfAvailable(topBar, "org.kde.plasma.panelspacer");
 addWidgetIfAvailable(topBar, "org.kde.plasma.systemtray");

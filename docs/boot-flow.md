@@ -14,29 +14,23 @@ The text gate and option `1` are implemented and have reached Plasma in the VM. 
 
 ## Main flow
 
-On boot, show a quiet full-screen terminal interface. The first test ISO proved the gate appears before KDE and option `1` reaches KDE. It also showed that the current ASCII logo is too wide in the VM, so the next visual pass should use a narrower premium terminal banner.
+On boot, show a quiet full-screen terminal interface. The first test ISO proved the gate appears before KDE and option `1` reaches KDE. The oversized ASCII wordmark has already been replaced by a compact fixed-width EOS Privet status box that fits the VM console.
 
-Target style:
+Current compact style:
 
 ```text
-  ______  ____   _____    ____   ____   ___ __     ______  ______
- |  ____|/ __ \ / ____|  |  _ \ |  _ \ |_ _|\ \   / / __ \|_   _|
- | |__  | |  | | (___    | |_) || |_) | | |  \ \_/ / |  | | | |
- |  __| | |  | |\___ \   |  __/ |  _ <  | |   \   /| |  | | | |
- | |____| |__| |____) |  | |    | | \ \ | |    | | | |__| |_| |_
- |______|\____/|_____/   |_|    |_|  \_\___|   |_|  \____/|_____|
-
- ----------------------------------------------------------------
-  USB LIVE PRIVACY SESSION GATE                    <build-version>
- ----------------------------------------------------------------
-
-   [1] Explore fresh
-       Temporary session. Nothing personal is unlocked.
-
-   [2] Unlock saved storage
-       Encrypted USB storage. Not configured in this test build.
-
- ----------------------------------------------------------------
+  +================================================================+
+  |                         E O S   P R I V E T                    |
+  |                    USB LIVE PRIVACY SESSION                   |
+  +================================================================+
+  |  STATUS    FRESH MODE READY                                    |
+  |  BUILD     <build-version>                                     |
+  +----------------------------------------------------------------+
+  |  [1]  EXPLORE FRESH                                            |
+  |       Starts a temporary desktop. Nothing personal is unlocked.|
+  |  [2]  UNLOCK SAVED STORAGE                                     |
+  |       Encrypted USB storage. Not configured in this test build.|
+  +================================================================+
   choose> _
 ```
 
@@ -45,7 +39,8 @@ If the user types `1`:
 - start a fresh live session
 - do not mount encrypted saved storage
 - continue to the graphical desktop
-- discard normal session changes on shutdown
+- target discarding normal session changes on shutdown; this claim remains pending until the documented reboot and mount checks pass
+- allow the EOS factory desktop transaction because the Fresh overlay is temporary
 
 If the user types `2`:
 
@@ -53,6 +48,9 @@ If the user types `2`:
 - ask for the unlock secret
 - if correct, mount encrypted USB storage
 - continue to the graphical desktop with saved files and settings available
+- never use a desktop schema-version change alone as permission to erase the saved user's panel customization
+
+The current Phase 2d build does not implement option `2`, but this reset boundary is already enforced: automatic factory layout application is allowed only when `/run/eos-privet/session-mode` says `fresh`. A future saved-storage provisioning flow must request its first factory layout explicitly and then preserve the separate one-time factory marker.
 
 ## First-time setup flow
 

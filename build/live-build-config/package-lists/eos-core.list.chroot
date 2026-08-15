@@ -3,7 +3,13 @@ live-config
 live-config-systemd
 live-tools
 user-setup
+bash
+coreutils
+diffutils
+grep
 dbus
+systemd
+util-linux
 locales
 keyboard-configuration
 live-task-kde
@@ -17,6 +23,7 @@ hicolor-icon-theme
 plasma-desktoptheme
 libkf6config-bin
 qdbus-qt6
+kactivitymanagerd
 kpackagetool6
 desktop-file-utils
 systemsettings
@@ -53,6 +60,7 @@ dolphin
 ark
 filelight
 kdialog
+python3
 python3-minimal
 fonts-inter
 fonts-hack

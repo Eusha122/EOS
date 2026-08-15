@@ -20,11 +20,12 @@ Last updated: 2026-08-15
 | Build workspace rule | Use VirtualBox shared folders only for transfer; run `live-build` from a native Debian filesystem such as `$HOME/EOS-build` |
 | First generated artifact | `out/EOS-Privet-0.1.0-dev-amd64.iso` was produced in the Debian builder VM and reached a UEFI VM desktop; it is obsolete. |
 | Old artifact warning | The Windows checksum beside the old `dev` artifact is zero bytes, so that artifact must not be reused or treated as verified. |
-| Current test artifact | Next build is `out/EOS-Privet-0.1.0-phase2d-amd64.iso`. The unique name prevents VirtualBox from reusing the visually broken Phase 2b/2c images. |
+| Current test artifact | Next build is `out/EOS-Privet-0.1.0-phase2d-amd64.iso`. Its name distinguishes it from the visually broken Phase 2b/2c images; the VM must still be fully powered off and attached to this exact file. |
 | Phase 2b build finding | The first Phase 2b build stopped before producing an ISO because automatic firmware discovery selected `firmware-b43legacy-installer`. Automatic firmware discovery and package recommendations are now disabled; EOS explicitly selects common PC firmware and required desktop/network packages. Post-build verification rejects both Broadcom download-at-install firmware packages. |
 | First boot-test finding | EOS gate appears before KDE and Fresh reaches the desktop; the first Phase 2 UI test still showed Debian wallpaper, KDE Welcome, and Install Debian. Double-checking found that Debian 13's `live-build` skipped the EOS hooks unless both compatibility and live hook directories were populated; that layout is now corrected, stock welcome/installer packages are removed, and the build fails if these customizations are absent. |
-| Phase 2c visual finding | Phase 2c reached Plasma but still used Debian's Global Theme, wallpaper, panel layout, and launcher defaults. Phase 2d supplies a valid EOS Plasma 6 Global Theme, valid wallpaper package, deterministic top-bar/dock layout, system/new-user KDE defaults, EOS system identity, and a bounded first-login repair that calls Plasma's native Global Theme loader only after the live layout settles. The Phase 2d VM boot test is still required. |
-| Desktop build policy | The ISO build must fail if EOS theme metadata is invalid, the wallpaper bytes differ, a pinned launcher is unavailable, required Plasma runtime packages are missing, desktop entries are invalid, KPackage cannot discover the EOS theme, or the completed ISO's SquashFS/boot configuration differs from the validated build tree. |
+| Phase 2c visual finding | Phase 2c reached Plasma but still used Debian's Global Theme, wallpaper, panel layout, and launcher defaults. Phase 2d replaces that path with a valid EOS Plasma 6 Global Theme, valid wallpaper package, deterministic top-bar/dock layout, system/new-user KDE defaults, and EOS identity at both standard `os-release` paths. The `phase2d-3` setup is a locked transaction: it binds every live/persisted check to KDE's exact current activity, validates the exact live layout, both Plasma persistence files, and visual preferences before committing; on failure it stops Plasma before restoring every touched user file and confirms the restarted live layout. Factory-reset state is separate from future migration versions so a schema bump cannot erase a saved user's customization. The Phase 2d VM boot test is still required. |
+| Desktop build policy | The ISO build must fail if EOS theme JavaScript/metadata is invalid, any wallpaper bytes differ, a pinned launcher is unavailable, required Plasma runtime packages are missing, the layout verifier tests fail, desktop entries are invalid, KPackage cannot discover the EOS theme, or any required file in the completed ISO's SquashFS differs in bytes or Unix mode from the validated build tree. Build and publication are single-writer operations and the ISO volume ID must be `EOS_PRIVET`. |
+| Package-profile policy | The manifest explicitly enables `core` and `firmware`. The build stages only enabled lists, requires every reserved security profile to remain comments-only, and rejects undeclared package lists. |
 | Boot UX | Pre-desktop text menu: `1` for fresh session, `2` for unlock saved storage |
 | Fresh-session login | Phase 2b exposed that disabling all APT recommendations also omitted `live-config` and `user-setup`, so the temporary `eos` account never existed. Phase 2c explicitly includes the Debian live runtime, user creation, SDDM integration, and a boot-gate safety check. Selecting `1` must continue directly to the temporary `eos` Plasma Wayland desktop without a password prompt. |
 | Browser direction | `Void` is the privacy browser brand; Tor-native browsing path required |
@@ -33,6 +34,7 @@ Last updated: 2026-08-15
 | Security promise | Reduce risk with tested, proven components; never claim EOS Privet is unhackable or fully anonymous |
 | Brand asset | `assets/branding/eos-logo.svg` |
 | Default wallpaper | `assets/wallpapers/cicada-default.png`, the user-supplied Cicada IV design; three other Cicada designs are selectable in Fresh mode |
+| Wallpaper scope | Automatic and manual EOS wallpaper changes target only KDE's verified current activity; they must never overwrite inactive/saved activity settings. |
 | Daily-use posture | Plug-and-use daily workflow matters as much as hardening |
 | Future built-in app | Website will later be packaged as the default `eos-desktop-app` |
 
@@ -60,7 +62,9 @@ Last updated: 2026-08-15
 11. Keep the first ISO small: authorised security-testing tools will be an optional later profile, not default background attack surface.
 12. Firmware support must come from an explicit reviewed package list; never allow download-at-install firmware packages to enter builds through broad automatic discovery.
 13. Desktop identity must be present before first login. Session-time repair may recover a bad configuration, but it must never be the primary theme-install mechanism or hide errors.
-14. A build is publishable only after checks open the completed ISO and verify its EOS identity, wallpaper bytes, theme/layout files, trusted-file ownership, live account, and BIOS/UEFI boot arguments.
+14. A build is publishable only after checks open the completed ISO and verify its EOS identity, all wallpaper bytes, theme/layout file bytes and readable/executable Unix modes, trusted-file ownership and symlink confinement, live-account inputs, and every normal/failsafe BIOS/UEFI boot argument. The checksum is published last and covers the ISO plus both release sidecars.
+15. No source-only check proves the graphical result. Phase 2d remains in progress until the newly built ISO passes the documented cold-boot VM acceptance test.
+16. A desktop schema change is not permission to reset a saved user's layout. Destructive factory layout application is allowed only in Fresh mode or through an explicit factory-reset action.
 
 ## Open decisions
 

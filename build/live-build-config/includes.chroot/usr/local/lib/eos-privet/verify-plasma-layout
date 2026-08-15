@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -32,6 +33,8 @@ DOCK_LAUNCHERS = ",".join(
         "applications:eos-welcome.desktop",
     ]
 )
+TOP_HEIGHT_RATIO = 1.9
+DOCK_HEIGHT_RATIO = 3.2
 
 
 MAX_INPUT_BYTES = 8 * 1024 * 1024
@@ -47,7 +50,9 @@ def extract_layout(script: str) -> dict[str, Any]:
         if "\r" in script:
             raise LayoutError("Plasma layout dump contains a bare carriage return")
     prefix = "var plasma = getApiVersion(1);\n\nvar layout = "
-    suffix = ";\n\nplasma.loadSerializedLayout(layout);"
+    # Plasma 6.3 concatenates QJsonDocument::toJson(QJsonDocument::Indented),
+    # which contributes exactly one newline after the closing JSON brace.
+    suffix = "\n;\n\nplasma.loadSerializedLayout(layout);"
     if not script.startswith(prefix):
         raise LayoutError("Plasma layout dump has an invalid wrapper")
 
@@ -78,7 +83,7 @@ def extract_layout(script: str) -> dict[str, Any]:
     return layout
 
 
-def validate_live(script: str) -> None:
+def validate_live(script: str, *, require_wallpaper: bool = True) -> None:
     layout = extract_layout(script)
     if layout.get("serializationFormatVersion") != "1":
         raise LayoutError("unsupported Plasma layout serialization version")
@@ -89,7 +94,7 @@ def validate_live(script: str) -> None:
     for index, desktop in enumerate(desktops):
         if not isinstance(desktop, dict):
             raise LayoutError(f"desktop {index} is not an object")
-        if desktop.get("wallpaperPlugin") != "org.kde.image":
+        if require_wallpaper and desktop.get("wallpaperPlugin") != "org.kde.image":
             raise LayoutError(f"desktop {index} does not use the image wallpaper plugin")
         desktop_config = desktop.get("config")
         wallpaper_config = (
@@ -97,8 +102,14 @@ def validate_live(script: str) -> None:
             if isinstance(desktop_config, dict)
             else None
         )
-        if not isinstance(wallpaper_config, dict) or wallpaper_config.get("Image") != WALLPAPER_URI:
-            raise LayoutError(f"desktop {index} does not use the EOS wallpaper")
+        if require_wallpaper and (
+            not isinstance(wallpaper_config, dict)
+            or wallpaper_config.get("Image") != WALLPAPER_URI
+            or wallpaper_config.get("FillMode") != "2"
+        ):
+            raise LayoutError(
+                f"desktop {index} does not use the exact EOS wallpaper settings"
+            )
 
     panels = layout.get("panels")
     if not isinstance(panels, list) or len(panels) != 2:
@@ -117,34 +128,52 @@ def validate_live(script: str) -> None:
         raise LayoutError("the EOS top bar or bottom dock is missing")
 
     top = by_location["top"]
-    if top.get("lengthMode") != "fill" or top.get("hiding") != "normal":
-        raise LayoutError("the EOS top bar has the wrong length or visibility mode")
-    top_plugins = [
-        applet.get("plugin")
-        for applet in top.get("applets", [])
-        if isinstance(applet, dict)
-    ]
-    if top_plugins != TOP_APPLETS:
+    if (
+        top.get("alignment") != "left"
+        or top.get("hiding") != "normal"
+    ):
+        raise LayoutError("the EOS top bar has the wrong alignment or visibility")
+    top_applets = top.get("applets")
+    if not isinstance(top_applets, list) or any(
+        not isinstance(applet, dict) for applet in top_applets
+    ):
+        raise LayoutError("the EOS top bar contains an invalid applet record")
+    if [applet.get("plugin") for applet in top_applets] != TOP_APPLETS:
         raise LayoutError("the EOS top-bar applets are missing, duplicated, or out of order")
+    launcher_config = top_applets[0].get("config")
+    launcher_general = (
+        launcher_config.get("/General") if isinstance(launcher_config, dict) else None
+    )
+    if not isinstance(launcher_general, dict) or launcher_general.get("icon") != "eos-privet":
+        raise LayoutError("the EOS launcher icon was not saved exactly")
 
     dock = by_location["bottom"]
     if (
-        dock.get("lengthMode") != "fit"
-        or dock.get("alignment") != "center"
+        dock.get("alignment") != "center"
         or dock.get("hiding") != "dodgewindows"
     ):
-        raise LayoutError("the EOS dock is not centered, fit-to-content, and dodge-windows")
-    dock_applets = [
-        applet
-        for applet in dock.get("applets", [])
-        if isinstance(applet, dict)
-    ]
+        raise LayoutError("the EOS dock is not centered and dodge-windows")
+    dock_applets = dock.get("applets")
+    if not isinstance(dock_applets, list) or any(
+        not isinstance(applet, dict) for applet in dock_applets
+    ):
+        raise LayoutError("the EOS dock contains an invalid applet record")
     if [applet.get("plugin") for applet in dock_applets] != DOCK_APPLETS:
         raise LayoutError("the EOS dock applets are missing, duplicated, or out of order")
     task_config = dock_applets[0].get("config")
     task_general = task_config.get("/General") if isinstance(task_config, dict) else None
-    if not isinstance(task_general, dict) or task_general.get("launchers") != DOCK_LAUNCHERS:
-        raise LayoutError("the EOS dock launcher list was not saved exactly")
+    if (
+        not isinstance(task_general, dict)
+        or task_general.get("launchers") != DOCK_LAUNCHERS
+        or task_general.get("showOnlyCurrentActivity") != "true"
+        or task_general.get("showOnlyCurrentDesktop") != "false"
+    ):
+        raise LayoutError("the EOS dock task-manager settings were not saved exactly")
+
+def javascript_round(value: float) -> int:
+    """Match JavaScript Math.round for the positive values used by Plasma."""
+
+    return math.floor(value + 0.5)
 
 
 def parse_kconfig(text: str) -> dict[tuple[str, ...], dict[str, str]]:
@@ -177,8 +206,36 @@ def parse_kconfig(text: str) -> dict[tuple[str, ...], dict[str, str]]:
     return sections
 
 
-def validate_config(text: str) -> None:
+def integer_value(
+    entries: dict[str, str], key: str, *, default: int | None = None
+) -> int:
+    raw_value = entries.get(key)
+    if raw_value is None:
+        if default is None:
+            raise LayoutError(f"persisted Plasma view is missing {key}")
+        return default
+    if not re.fullmatch(r"0|[1-9][0-9]*", raw_value):
+        raise LayoutError(f"persisted Plasma view has an invalid {key}")
+    return int(raw_value)
+
+
+def valid_persisted_thicknesses(top_thickness: int, dock_thickness: int) -> bool:
+    return any(
+        top_thickness == javascript_round(grid_unit * TOP_HEIGHT_RATIO)
+        and dock_thickness == javascript_round(grid_unit * DOCK_HEIGHT_RATIO)
+        for grid_unit in range(8, 129, 2)
+    )
+
+
+def validate_config(
+    text: str,
+    shell_text: str,
+    *,
+    activity_id: str | None = None,
+    expected_desktop_count: int = 1,
+) -> None:
     sections = parse_kconfig(text)
+    shell_sections = parse_kconfig(shell_text)
     containments: dict[str, dict[str, str]] = {
         group[1]: entries
         for group, entries in sections.items()
@@ -208,8 +265,9 @@ def validate_config(text: str) -> None:
             if not group[3].isdigit():
                 raise LayoutError("persisted panel has a non-numeric applet id")
             plugin = entries.get("plugin")
-            if plugin:
-                applet_plugins[group[1]][group[3]] = plugin
+            if not plugin:
+                raise LayoutError("persisted panel has an applet without a plugin")
+            applet_plugins[group[1]][group[3]] = plugin
 
     ordered_plugins: dict[str, list[str]] = {}
     ordered_applet_ids: dict[str, list[str]] = {}
@@ -244,13 +302,50 @@ def validate_config(text: str) -> None:
         raise LayoutError("persisted Plasma config does not preserve the EOS panel roles and order")
 
     dock_id = dock_matches[0]
+    top_id = top_matches[0]
+    launcher_applet_id = ordered_applet_ids[top_id][0]
+    launcher_general = sections.get(
+        ("Containments", top_id, "Applets", launcher_applet_id, "Configuration", "General"),
+        {},
+    )
+    if launcher_general.get("icon") != "eos-privet":
+        raise LayoutError("persisted Plasma config does not preserve the EOS launcher icon")
+
     task_applet_id = ordered_applet_ids[dock_id][0]
     task_general = sections.get(
         ("Containments", dock_id, "Applets", task_applet_id, "Configuration", "General"),
         {},
     )
-    if task_general.get("launchers") != DOCK_LAUNCHERS:
-        raise LayoutError("persisted Plasma config does not preserve the EOS dock launchers")
+    if (
+        task_general.get("launchers") != DOCK_LAUNCHERS
+        or task_general.get("showOnlyCurrentActivity") != "true"
+        or task_general.get("showOnlyCurrentDesktop") != "false"
+    ):
+        raise LayoutError(
+            "persisted Plasma config does not preserve the EOS dock task settings"
+        )
+
+    top_view = shell_sections.get(("PlasmaViews", f"Panel {top_id}"), {})
+    dock_view = shell_sections.get(("PlasmaViews", f"Panel {dock_id}"), {})
+    if (
+        integer_value(top_view, "alignment") != 1
+        or integer_value(top_view, "panelLengthMode", default=0) != 0
+        or integer_value(top_view, "panelVisibility", default=0) != 0
+    ):
+        raise LayoutError("persisted EOS top-bar view settings are incorrect")
+    if (
+        integer_value(dock_view, "alignment", default=132) != 132
+        or integer_value(dock_view, "panelLengthMode") != 1
+        or integer_value(dock_view, "panelVisibility") != 2
+    ):
+        raise LayoutError("persisted EOS dock view settings are incorrect")
+
+    top_defaults = shell_sections.get(("PlasmaViews", f"Panel {top_id}", "Defaults"), {})
+    dock_defaults = shell_sections.get(("PlasmaViews", f"Panel {dock_id}", "Defaults"), {})
+    top_thickness = integer_value(top_defaults, "thickness", default=30)
+    dock_thickness = integer_value(dock_defaults, "thickness")
+    if not valid_persisted_thicknesses(top_thickness, dock_thickness):
+        raise LayoutError("persisted EOS panel thicknesses do not match the theme")
 
     active_desktops = {
         containment_id: entries
@@ -261,17 +356,46 @@ def validate_config(text: str) -> None:
     }
     if not active_desktops:
         raise LayoutError("persisted Plasma config has no active desktop containment")
-    for containment_id, entries in active_desktops.items():
-        if entries.get("wallpaperplugin") != "org.kde.image":
-            raise LayoutError(
-                f"persisted desktop {containment_id} does not use the image wallpaper plugin"
-            )
+    if activity_id is None:
+        current_desktops = active_desktops
+    else:
+        current_desktops = {
+            containment_id: entries
+            for containment_id, entries in active_desktops.items()
+            if entries.get("activityId") == activity_id
+        }
+    if len(current_desktops) != expected_desktop_count:
+        raise LayoutError(
+            "persisted current-activity desktop count differs from the live layout"
+        )
+    for containment_id, entries in current_desktops.items():
         wallpaper_entries = sections.get(
             ("Containments", containment_id, "Wallpaper", "org.kde.image", "General"),
             {},
         )
-        if wallpaper_entries.get("Image") != WALLPAPER_URI:
-            raise LayoutError(f"persisted desktop {containment_id} lacks the EOS wallpaper")
+        if entries.get("wallpaperplugin") != "org.kde.image":
+            raise LayoutError(
+                f"persisted current desktop {containment_id} has the wrong wallpaper plugin"
+            )
+        if (
+            wallpaper_entries.get("Image") != WALLPAPER_URI
+            or wallpaper_entries.get("FillMode") != "2"
+        ):
+            raise LayoutError(
+                f"persisted current desktop {containment_id} lacks the exact EOS wallpaper"
+            )
+
+
+def compare_live(first: str, second: str) -> None:
+    if extract_layout(first) != extract_layout(second):
+        raise LayoutError("the restored live Plasma layout differs from its snapshot")
+
+
+def read_limited(path: Path) -> str:
+    raw = path.read_bytes()
+    if len(raw) > MAX_INPUT_BYTES:
+        raise LayoutError(f"input exceeds {MAX_INPUT_BYTES} bytes: {path}")
+    return raw.decode("utf-8")
 
 
 def main() -> int:
@@ -279,17 +403,51 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--live", metavar="FILE", type=Path)
     mode.add_argument("--config", metavar="FILE", type=Path)
+    mode.add_argument("--compare-live", metavar=("BEFORE", "AFTER"), nargs=2, type=Path)
+    parser.add_argument("--shell-config", metavar="FILE", type=Path)
+    parser.add_argument("--live-context", metavar="FILE", type=Path)
+    parser.add_argument("--activity-id", metavar="UUID")
+    parser.add_argument(
+        "--panels-only",
+        action="store_true",
+        help="validate exact panel structure but allow wallpaper setup to finish",
+    )
     args = parser.parse_args()
-    source = args.live or args.config
     try:
-        raw = source.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            raise LayoutError(f"input exceeds {MAX_INPUT_BYTES} bytes")
-        text = raw.decode("utf-8")
+        if args.panels_only and not args.live:
+            raise LayoutError("--panels-only requires --live")
+        config_values = (
+            args.config,
+            args.shell_config,
+            args.live_context,
+            args.activity_id,
+        )
+        if len([value for value in config_values if value]) not in {0, 4}:
+            raise LayoutError(
+                "--config, --shell-config, --live-context, and --activity-id must be supplied together"
+            )
+        if args.activity_id and not re.fullmatch(
+            r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}",
+            args.activity_id,
+        ):
+            raise LayoutError("--activity-id is not a valid KDE activity UUID")
         if args.live:
-            validate_live(text)
+            validate_live(read_limited(args.live), require_wallpaper=not args.panels_only)
+        elif args.config:
+            live_context = read_limited(args.live_context)
+            validate_live(live_context)
+            serialized_desktops = extract_layout(live_context).get("desktops")
+            validate_config(
+                read_limited(args.config),
+                read_limited(args.shell_config),
+                activity_id=args.activity_id,
+                expected_desktop_count=len(serialized_desktops),
+            )
         else:
-            validate_config(text)
+            compare_live(
+                read_limited(args.compare_live[0]),
+                read_limited(args.compare_live[1]),
+            )
     except (OSError, UnicodeError, LayoutError, RecursionError) as error:
         print(f"EOS Plasma layout verification failed: {error}", file=sys.stderr)
         return 1
